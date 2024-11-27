@@ -2,13 +2,21 @@ package com.example.websitereader
 
 import android.content.Intent
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.util.Patterns
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.net.URI
 
-class  ShareReceiver : AppCompatActivity() {
-    lateinit var websiteFetcher: WebsiteFetcher
+class ShareReceiver : AppCompatActivity() {
+    val websiteFetcher = WebsiteFetcher()
     lateinit var ttsReader: TTSReader
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -18,8 +26,8 @@ class  ShareReceiver : AppCompatActivity() {
         // Handle the incoming intent
         handleIncomingIntent()
 
-        websiteFetcher = WebsiteFetcher()
-        ttsReader = TTSReader()
+        //websiteFetcher = WebsiteFetcher()
+        ttsReader = TTSReader(this)
     }
 
     private fun handleIncomingIntent() {
@@ -31,13 +39,17 @@ class  ShareReceiver : AppCompatActivity() {
             // Check if the shared text is a URL
             sharedText?.let { url ->
                 // Do something with the URL
-                validateAndProcessSharedUrl(url)
+
+                val scope = CoroutineScope(Dispatchers.Main)
+                scope.launch {
+                    validateAndProcessSharedUrl(url)
+                }
             }
         }
     }
 
 
-    private fun validateAndProcessSharedUrl(sharedText: String) {
+    private suspend fun validateAndProcessSharedUrl(sharedText: String) {
         // Check if the shared text matches a URL pattern
         if (Patterns.WEB_URL.matcher(sharedText).matches()) {
             try {
@@ -59,10 +71,30 @@ class  ShareReceiver : AppCompatActivity() {
         }
     }
 
-    private fun processSharedUrl(sharedUrl: String) {
+    private suspend fun processSharedUrl(sharedUrl: String) {
         val content = websiteFetcher.processUrl(sharedUrl)
         if(content != null) {
-            ttsReader.speak(content)
+            //ttsReader.speak(content)
+
+            CoroutineScope(Dispatchers.Default).launch {
+                while(ttsReader.readyStatus != TextToSpeech.SUCCESS) {
+                    delay(100)
+                }
+                withContext(Dispatchers.Main) {
+                    ttsReader.synthesizeTextToFile(this@ShareReceiver, content, "audio/test.opus", { result -> if(result != null) {
+                        Log.i("lang", content.langCode)
+                        val fileUri = FileProvider.getUriForFile(this@ShareReceiver, "com.example.websitereader.fileprovider", File(result))
+                        val intent = Intent(Intent.ACTION_VIEW)
+                        intent.setDataAndType(fileUri, "audio/ogg")
+                        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        startActivity(intent)
+
+                        runOnUiThread({
+                            ttsReader.playAudio(this@ShareReceiver, result)
+                        })
+                    }})
+                }
+            }
         }
     }
 }

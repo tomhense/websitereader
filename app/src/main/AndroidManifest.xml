@@ -15,8 +15,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
-            android:theme="@style/Theme.WebsiteReader">
+            android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -24,18 +23,31 @@
             </intent-filter>
         </activity>
         <activity android:name=".ShareReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:theme="@style/Theme.AppCompat.Light"
+            >
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
-        <queries>
-            <itent>
-                <action android:name="android.intent.action.TTS_SERVICE"/>
-            </itent>
-        </queries>
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.example.websitereader.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE"/>
+        </intent>
+    </queries>
+    <uses-permission android:name="android.permission.INTERNET"/>
+
 
 </manifest>
