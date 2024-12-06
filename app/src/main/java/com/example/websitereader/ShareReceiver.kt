@@ -26,8 +26,12 @@ class ShareReceiver : AppCompatActivity() {
         // Handle the incoming intent
         handleIncomingIntent()
 
-        //websiteFetcher = WebsiteFetcher()
         ttsReader = TTSReader(this)
+    }
+
+    override fun onDestroy() {
+        ttsReader.onDestroy()
+        super.onDestroy()
     }
 
     private fun handleIncomingIntent() {
@@ -55,7 +59,10 @@ class ShareReceiver : AppCompatActivity() {
             try {
                 val uri = URI(sharedText)
                 // Ensure it starts with http or https
-                if (uri.scheme.equals("http", ignoreCase = true) || uri.scheme.equals("https", ignoreCase = true)) {
+                if (uri.scheme.equals("http", ignoreCase = true) || uri.scheme.equals(
+                        "https", ignoreCase = true
+                    )
+                ) {
                     // It's a valid URL, process further
                     processSharedUrl(sharedText)
                 } else {
@@ -73,26 +80,34 @@ class ShareReceiver : AppCompatActivity() {
 
     private suspend fun processSharedUrl(sharedUrl: String) {
         val content = websiteFetcher.processUrl(sharedUrl)
-        if(content != null) {
+        if (content != null) {
             //ttsReader.speak(content)
+            Log.i("lang", content.langCode)
 
             CoroutineScope(Dispatchers.Default).launch {
-                while(ttsReader.readyStatus != TextToSpeech.SUCCESS) {
+                while (ttsReader.readyStatus != TextToSpeech.SUCCESS) {
                     delay(100)
                 }
                 withContext(Dispatchers.Main) {
-                    ttsReader.synthesizeTextToFile(this@ShareReceiver, content, "audio/test.opus", { result -> if(result != null) {
-                        Log.i("lang", content.langCode)
-                        val fileUri = FileProvider.getUriForFile(this@ShareReceiver, "com.example.websitereader.fileprovider", File(result))
-                        val intent = Intent(Intent.ACTION_VIEW)
-                        intent.setDataAndType(fileUri, "audio/ogg")
-                        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        startActivity(intent)
+                    ttsReader.synthesizeTextToFile(this@ShareReceiver,
+                        content,
+                        "audio/test.opus",
+                        { result ->
+                            if (result != null) {
+                                Log.i("lang", content.langCode)
+                                val fileUri = FileProvider.getUriForFile(
+                                    this@ShareReceiver,
+                                    "com.example.websitereader.fileprovider",
+                                    File(result)
+                                )
+                                val intent = Intent(Intent.ACTION_VIEW)
+                                intent.setDataAndType(fileUri, "audio/ogg")
+                                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                startActivity(intent)
 
-                        runOnUiThread({
-                            ttsReader.playAudio(this@ShareReceiver, result)
+                                this@ShareReceiver.finish()
+                            }
                         })
-                    }})
                 }
             }
         }
