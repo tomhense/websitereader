@@ -80,12 +80,14 @@ class ShareReceiver : AppCompatActivity() {
         if (content != null) {
             Log.i("lang", content.langCode)
 
-            ttsReader.synthesizeTextToFile(this@ShareReceiver, content, "audio/test.mp4")
+            val outputFile = File(this@ShareReceiver.filesDir, "audio/output.opus")
+
+            ttsReader.synthesizeTextToFile(this@ShareReceiver, content, outputFile.absolutePath)
 
             val fileUri = FileProvider.getUriForFile(
                 this@ShareReceiver,
                 "com.example.websitereader.fileprovider",
-                File(this@ShareReceiver.filesDir, "audio/test.mp4")
+                outputFile
             )
 
             val intent = Intent(Intent.ACTION_VIEW)

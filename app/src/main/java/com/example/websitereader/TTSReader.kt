@@ -5,18 +5,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import androidx.annotation.OptIn
-import androidx.media3.common.MediaItem
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.transformer.Composition
-import androidx.media3.transformer.EditedMediaItem
-import androidx.media3.transformer.EditedMediaItemSequence
-import androidx.media3.transformer.ExportException
-import androidx.media3.transformer.ExportResult
-import androidx.media3.transformer.Transformer
-import com.google.common.collect.ImmutableList
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
+import android.util.Log
+import com.arthenica.ffmpegkit.FFmpegKit
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
@@ -39,7 +29,7 @@ class TTSReader(context: Context) : TextToSpeech.OnInitListener {
         var chunk = ""
         val maxInputLength = TextToSpeech.getMaxSpeechInputLength()
         for (word in words) {
-            if ((chunk + word).length > maxInputLength) {
+            if ((chunk + word).length >= maxInputLength) {
                 list.add(chunk)
                 chunk = ""
             }
@@ -49,57 +39,34 @@ class TTSReader(context: Context) : TextToSpeech.OnInitListener {
         return list
     }
 
-    @OptIn(UnstableApi::class)
     private suspend fun concatAudioFiles(
         context: Context,
         audioUris: List<Uri>,
         outputPath: String
-    ): ExportResult = suspendCancellableCoroutine { continuation ->
-        val mediaItemList = ImmutableList.Builder<EditedMediaItem>()
-        for (uri in audioUris) {
-            mediaItemList.add(EditedMediaItem.Builder(MediaItem.fromUri(uri)).build())
-        }
-        val audioSequence = EditedMediaItemSequence.Builder(mediaItemList.build()).build()
-        val composition = Composition.Builder(ImmutableList.of(audioSequence)).build()
-        val transformer = Transformer.Builder(context).build()
+    ): Boolean = suspendCancellableCoroutine { continuation ->
+        // Create concat list
+        val concatListFile = File(context.filesDir, "audio/concat_list.txt")
+        val concatList = audioUris.joinToString("\n") { "file '${it.path}'" }
+        concatListFile.writeText(concatList)
 
-        val transformerListener = object : Transformer.Listener {
-            override fun onCompleted(composition: Composition, exportResult: ExportResult) {
-                // Resume coroutine with the result
-                if (continuation.isActive) {
-                    continuation.resume(exportResult)
-                }
-            }
-
-            override fun onError(
-                composition: Composition,
-                exportResult: ExportResult,
-                exportException: ExportException
-            ) {
-                // Resume coroutine with an exception if it fails
-                if (continuation.isActive) {
-                    continuation.resumeWithException(exportException)
-                }
-            }
-        }
-
-        transformer.addListener(transformerListener)
-
-        continuation.invokeOnCancellation {
-            // Clean up resources or cancel the operation if coroutine is cancelled
-            transformer.removeListener(transformerListener)
-        }
-
-        try {
-            //transformer.start(composition, outputPath)
-            transformer.start(
-                composition,
-                "file:///data/user/0/com.example.websitereader/files/audio/test.mp4"
+        FFmpegKit.executeWithArgumentsAsync(
+            arrayOf(
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                concatListFile.path,
+                "-y",
+                outputPath
             )
-        } catch (e: Exception) {
-            // Handle the case where transformer.start immediately throws an exception
-            if (continuation.isActive) {
-                continuation.resumeWithException(e)
+        ) { session ->
+            Log.i("FFmpegKit", "Started session ${session.sessionId}")
+
+            if (session.returnCode.isValueSuccess) {
+                continuation.resume(true)
+            } else {
+                continuation.resumeWithException(Exception("FFmpeg error: ${session.failStackTrace}"))
             }
         }
     }
@@ -112,31 +79,26 @@ class TTSReader(context: Context) : TextToSpeech.OnInitListener {
         val chunks = splitTextIntoChunks(text.string)
         val audioUris = ArrayList<Uri>()
 
+        Log.i("tts", "${chunks.size} chunks")
+        Log.i("tts", "Max tts chunk length: ${TextToSpeech.getMaxSpeechInputLength()}")
+        for (i in chunks.indices) {
+            Log.i("tts", "Chunk $i length: ${chunks[i].length}")
+        }
+
         // Make sure dirs exist
         File(context.filesDir, "audio").mkdirs()
 
-        val futures = chunks.indices.map { i ->
-            //audioUris.add(File(context.filesDir, "audio/temp_$i.mp3").toUri())
+        // Processing the chunks in parallel seems not not work, so synchronous it is
+        chunks.indices.map { i ->
             audioUris.add(Uri.fromFile(File(context.filesDir, "audio/temp_$i.mp3")))
-            async {
-                synthesizeTextChunkToFile(
-                    context,
-                    WebsiteFetcher.LocalizedString(chunks[i], text.langCode),
-                    "audio/temp_$i.mp3",
-                )
-            }
-        }
-
-        futures.awaitAll()
-
-        if (chunks.size == -1) {
-            File(context.filesDir, "audio/temp_0.mp3").copyTo(
-                File(context.filesDir, fileName),
-                true
+            synthesizeTextChunkToFile(
+                context,
+                WebsiteFetcher.LocalizedString(chunks[i], text.langCode),
+                "audio/temp_$i.mp3",
             )
-        } else {
-            concatAudioFiles(context, audioUris, fileName)
         }
+
+        concatAudioFiles(context, audioUris, fileName)
     }
 
 

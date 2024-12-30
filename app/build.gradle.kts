@@ -62,4 +62,5 @@ dependencies {
     implementation("net.dankito.readability4j:readability4j:1.0.8")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jsoup:jsoup:1.14.3")
+    implementation("com.arthenica:ffmpeg-kit-full:6.0-2")
 }
