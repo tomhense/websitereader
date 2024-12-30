@@ -2,16 +2,13 @@ package com.example.websitereader
 
 import android.content.Intent
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.util.Patterns
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URI
 
@@ -81,9 +78,22 @@ class ShareReceiver : AppCompatActivity() {
     private suspend fun processSharedUrl(sharedUrl: String) {
         val content = websiteFetcher.processUrl(sharedUrl)
         if (content != null) {
-            //ttsReader.speak(content)
             Log.i("lang", content.langCode)
 
+            ttsReader.synthesizeTextToFile(this@ShareReceiver, content, "audio/test.mp4")
+
+            val fileUri = FileProvider.getUriForFile(
+                this@ShareReceiver,
+                "com.example.websitereader.fileprovider",
+                File(this@ShareReceiver.filesDir, "audio/test.mp4")
+            )
+
+            val intent = Intent(Intent.ACTION_VIEW)
+            intent.setDataAndType(fileUri, "audio/ogg")
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(intent)
+
+            /*
             CoroutineScope(Dispatchers.Default).launch {
                 while (ttsReader.readyStatus != TextToSpeech.SUCCESS) {
                     delay(100)
@@ -110,6 +120,7 @@ class ShareReceiver : AppCompatActivity() {
                         })
                 }
             }
+            */
         }
     }
 }

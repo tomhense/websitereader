@@ -5,42 +5,35 @@ import android.net.Uri
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.EditedMediaItemSequence
+import androidx.media3.transformer.ExportException
+import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
 import com.google.common.collect.ImmutableList
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import java.util.Locale
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.random.Random
 
-class TTSReader(private val context: Context) : TextToSpeech.OnInitListener {
+class TTSReader(context: Context) : TextToSpeech.OnInitListener {
     var readyStatus: Int = -1
     private val textToSpeech = TextToSpeech(context, this)
 
     override fun onInit(status: Int) {
         readyStatus = status
-        if (status == TextToSpeech.SUCCESS) {
-            // Set the language to US English
-            val result = textToSpeech.setLanguage(Locale.US)
-
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                // Handle the error
-                println("Language not supported or missing data")
-            }
-        } else {
-            // Initialization failed
-            println("Initialization Failed!")
-        }
     }
 
-    fun splitTextIntoChunks(text: String): List<String> {
+    private fun splitTextIntoChunks(text: String): List<String> {
         val list = mutableListOf<String>()
         val words = text.split(" ")
         var chunk = ""
@@ -56,93 +49,148 @@ class TTSReader(private val context: Context) : TextToSpeech.OnInitListener {
         return list
     }
 
-
     @OptIn(UnstableApi::class)
-    fun concatAudioFiles(audioUris: List<Uri>, outputPath: String) {
+    private suspend fun concatAudioFiles(
+        context: Context,
+        audioUris: List<Uri>,
+        outputPath: String
+    ): ExportResult = suspendCancellableCoroutine { continuation ->
         val mediaItemList = ImmutableList.Builder<EditedMediaItem>()
         for (uri in audioUris) {
             mediaItemList.add(EditedMediaItem.Builder(MediaItem.fromUri(uri)).build())
         }
         val audioSequence = EditedMediaItemSequence.Builder(mediaItemList.build()).build()
         val composition = Composition.Builder(ImmutableList.of(audioSequence)).build()
-
         val transformer = Transformer.Builder(context).build()
-        transformer.start(composition, outputPath)
+
+        val transformerListener = object : Transformer.Listener {
+            override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                // Resume coroutine with the result
+                if (continuation.isActive) {
+                    continuation.resume(exportResult)
+                }
+            }
+
+            override fun onError(
+                composition: Composition,
+                exportResult: ExportResult,
+                exportException: ExportException
+            ) {
+                // Resume coroutine with an exception if it fails
+                if (continuation.isActive) {
+                    continuation.resumeWithException(exportException)
+                }
+            }
+        }
+
+        transformer.addListener(transformerListener)
+
+        continuation.invokeOnCancellation {
+            // Clean up resources or cancel the operation if coroutine is cancelled
+            transformer.removeListener(transformerListener)
+        }
+
+        try {
+            //transformer.start(composition, outputPath)
+            transformer.start(
+                composition,
+                "file:///data/user/0/com.example.websitereader/files/audio/test.mp4"
+            )
+        } catch (e: Exception) {
+            // Handle the case where transformer.start immediately throws an exception
+            if (continuation.isActive) {
+                continuation.resumeWithException(e)
+            }
+        }
     }
 
     suspend fun synthesizeTextToFile(
         context: Context,
         text: WebsiteFetcher.LocalizedString,
         fileName: String,
-        callback: (String?) -> Unit
-    ) {
+    ) = coroutineScope {
         val chunks = splitTextIntoChunks(text.string)
+        val audioUris = ArrayList<Uri>()
 
-        for (i in chunks.indices) {
-            synthesizeTextToFileShort(
-                context,
-                WebsiteFetcher.LocalizedString(chunks[i], text.langCode),
-                "audio/temp_$i.mp3",
-                callback
+        // Make sure dirs exist
+        File(context.filesDir, "audio").mkdirs()
+
+        val futures = chunks.indices.map { i ->
+            //audioUris.add(File(context.filesDir, "audio/temp_$i.mp3").toUri())
+            audioUris.add(Uri.fromFile(File(context.filesDir, "audio/temp_$i.mp3")))
+            async {
+                synthesizeTextChunkToFile(
+                    context,
+                    WebsiteFetcher.LocalizedString(chunks[i], text.langCode),
+                    "audio/temp_$i.mp3",
+                )
+            }
+        }
+
+        futures.awaitAll()
+
+        if (chunks.size == -1) {
+            File(context.filesDir, "audio/temp_0.mp3").copyTo(
+                File(context.filesDir, fileName),
+                true
             )
+        } else {
+            concatAudioFiles(context, audioUris, fileName)
         }
     }
 
-    suspend fun synthesizeTextToFileShort(
+
+    private suspend fun synthesizeTextChunkToFile(
         context: Context,
         text: WebsiteFetcher.LocalizedString,
         fileName: String,
-        callback: (String?) -> Unit
-    ) {
+    ): Boolean = suspendCancellableCoroutine { continuation ->
         if (readyStatus != TextToSpeech.SUCCESS) {
-            return
+            continuation.resumeWithException(IllegalStateException("TTS engine not initialized"))
+            return@suspendCancellableCoroutine
         }
 
-        CoroutineScope(Dispatchers.Default).launch {
-            textToSpeech.language = Locale(text.langCode)
+        val fileDescriptor = File(context.filesDir, fileName)
 
-            val outputFile = File(context.filesDir, fileName)
-            if (!outputFile.parentFile!!.exists()) {
-                outputFile.parentFile!!.mkdirs()
+        val params = Bundle()
+        params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "utteranceId")
+
+        val utteranceId = Random.nextLong().toString() // Generate a random utterance id
+        val utteranceProgressListener = object : UtteranceProgressListener() {
+            override fun onStart(utteranceIdParam: String) {
+                // If needed, handle start of the synthesis
             }
 
-            val params = Bundle()
-            params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "utteranceId")
-
-
-            val listener = object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String) {
-                    // Do something when TTS starts
-                }
-
-                override fun onDone(utteranceId: String) {
-                    callback(outputFile.path)
-                    textToSpeech.shutdown()
-                }
-
-                override fun onError(utteranceId: String) {
-                    Log.e("TTS error", "onError: $utteranceId")
-                    callback(null)
-                    textToSpeech.shutdown()
-                }
-
-                override fun onError(utteranceId: String, errorCode: Int) {
-                    Log.e("TTS error", "onError: $utteranceId, errorCode: $errorCode")
-                    Log.e(
-                        "test",
-                        "${text.string.length.toString()} | ${TextToSpeech.getMaxSpeechInputLength()}"
-                    )
-                    callback(null)
-                    textToSpeech.shutdown()
+            override fun onDone(utteranceIdParam: String) {
+                if (utteranceIdParam == utteranceId) {
+                    continuation.resume(true)
                 }
             }
 
-            textToSpeech.setOnUtteranceProgressListener(listener)
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceIdParam: String) {
+                if (utteranceIdParam == utteranceId) {
+                    continuation.resumeWithException(Exception("Synthesis error"))
+                }
+            }
 
-            @Suppress("DEPRECATION")
-            textToSpeech.synthesizeToFile(text.string, params, outputFile, "utteranceId")
+            override fun onError(utteranceIdParam: String, errorCode: Int) {
+                if (utteranceIdParam == utteranceId) {
+                    continuation.resumeWithException(Exception("Synthesis error (error code $errorCode)"))
+                }
+            }
         }
 
+        textToSpeech.setOnUtteranceProgressListener(utteranceProgressListener)
+        textToSpeech.language = Locale(text.langCode)
+
+        textToSpeech.synthesizeToFile(text.string, params, fileDescriptor, utteranceId)
+            .also { result ->
+                if (result != TextToSpeech.SUCCESS) {
+                    continuation.resumeWithException(Exception("Error starting synthesis"))
+                    return@suspendCancellableCoroutine
+                }
+            }
     }
 
     fun onDestroy() {
