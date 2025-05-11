@@ -1,4 +1,4 @@
-package com.example.websitereader
+package com.example.websitereader.tts
 
 import android.content.Context
 import android.net.Uri
@@ -6,7 +6,9 @@ import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
-import com.arthenica.ffmpegkit.FFmpegKit
+import com.example.websitereader.WebsiteFetcher
+import com.example.websitereader.tts.Utils.concatAudioFiles
+import com.example.websitereader.tts.Utils.splitTextIntoChunks
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
@@ -15,68 +17,20 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.random.Random
 
-class TTSReader(context: Context) : TextToSpeech.OnInitListener {
-    var readyStatus: Int = -1
+class Android(context: Context) : TextToSpeech.OnInitListener, Provider {
+    private var readyStatus: Int = -1
     private val textToSpeech = TextToSpeech(context, this)
 
     override fun onInit(status: Int) {
         readyStatus = status
     }
 
-    private fun splitTextIntoChunks(text: String): List<String> {
-        val list = mutableListOf<String>()
-        val words = text.split(" ")
-        var chunk = ""
-        val maxInputLength = TextToSpeech.getMaxSpeechInputLength()
-        for (word in words) {
-            if ((chunk + word).length >= maxInputLength) {
-                list.add(chunk)
-                chunk = ""
-            }
-            chunk += "$word "
-        }
-        list.add(chunk)
-        return list
-    }
-
-    private suspend fun concatAudioFiles(
-        context: Context,
-        audioUris: List<Uri>,
-        outputPath: String
-    ): Boolean = suspendCancellableCoroutine { continuation ->
-        // Create concat list
-        val concatListFile = File(context.filesDir, "audio/concat_list.txt")
-        val concatList = audioUris.joinToString("\n") { "file '${it.path}'" }
-        concatListFile.writeText(concatList)
-
-        FFmpegKit.executeWithArgumentsAsync(
-            arrayOf(
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                concatListFile.path,
-                "-y",
-                outputPath
-            )
-        ) { session ->
-            Log.i("FFmpegKit", "Started session ${session.sessionId}")
-
-            if (session.returnCode.isValueSuccess) {
-                continuation.resume(true)
-            } else {
-                continuation.resumeWithException(Exception("FFmpeg error: ${session.failStackTrace}"))
-            }
-        }
-    }
-
-    suspend fun synthesizeTextToFile(
+    override suspend fun synthesizeTextToFile(
         context: Context,
         text: WebsiteFetcher.LocalizedString,
         fileName: String,
-    ) = coroutineScope {
-        val chunks = splitTextIntoChunks(text.string)
+    ): Unit = coroutineScope {
+        val chunks = splitTextIntoChunks(text.string, TextToSpeech.getMaxSpeechInputLength())
         val audioUris = ArrayList<Uri>()
 
         Log.i("tts", "${chunks.size} chunks")
@@ -129,7 +83,7 @@ class TTSReader(context: Context) : TextToSpeech.OnInitListener {
                 }
             }
 
-            @Deprecated("Deprecated in Java")
+            @Deprecated("Deprecated in Java", ReplaceWith("onError(utteranceIdParam, errorCode)"))
             override fun onError(utteranceIdParam: String) {
                 if (utteranceIdParam == utteranceId) {
                     continuation.resumeWithException(Exception("Synthesis error"))

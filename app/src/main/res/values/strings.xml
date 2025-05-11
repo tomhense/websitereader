@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">Website Reader</string>
+    <string name="share_receiver_url_label">URL: %1$s</string>
+    <string name="share_receiver_headline">Read Website</string>
+    <string name="share_receiver_article_info_label">Words: %1$d | Characters: %2$d | Language: %3$s</string>
+    <string name="share_receiver_tts_service_label">TTS Service</string>"
+    <string name="share_receiver_estimated_cost_label">Estimated cost: %1$s</string>
+    <string name="share_receive_preview_article_button">Preview article</string>">
+    <string name="share_receive_generate_audio_button">Generate Audio</string>
+    <string name="language">Language</string>
 </resources>
