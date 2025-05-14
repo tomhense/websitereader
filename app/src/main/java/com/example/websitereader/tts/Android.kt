@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
+import android.widget.Toast
 import com.example.websitereader.WebsiteFetcher
 import com.example.websitereader.tts.Utils.concatAudioFiles
 import com.example.websitereader.tts.Utils.splitTextIntoChunks
@@ -17,18 +18,32 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.random.Random
 
-class Android(context: Context) : TextToSpeech.OnInitListener, Provider {
-    private var readyStatus: Int = -1
+class Android(private val context: Context, private val initCallback: () -> Unit) :
+    TextToSpeech.OnInitListener,
+    Provider {
+    private var isReady: Boolean = false
+
+
     private val textToSpeech = TextToSpeech(context, this)
 
     override fun onInit(status: Int) {
-        readyStatus = status
+        if (status != TextToSpeech.SUCCESS) {
+            Log.e("tts", "TTS engine initialization failed with status $status")
+            Toast.makeText(
+                context,
+                "TTS engine initialization failed with status $status",
+                Toast.LENGTH_SHORT
+            ).show()
+            throw IllegalStateException("ERROR INITIALIZING TTS")
+        }
+        initCallback()
+        isReady = true
     }
 
     override suspend fun synthesizeTextToFile(
-        context: Context,
         text: WebsiteFetcher.LocalizedString,
         fileName: String,
+        progressCallback: (Double, ProgressState) -> Unit
     ): Unit = coroutineScope {
         val chunks = splitTextIntoChunks(text.string, TextToSpeech.getMaxSpeechInputLength())
         val audioUris = ArrayList<Uri>()
@@ -44,6 +59,7 @@ class Android(context: Context) : TextToSpeech.OnInitListener, Provider {
 
         // Processing the chunks in parallel seems not not work, so synchronous it is
         chunks.indices.map { i ->
+            progressCallback(i.toDouble() / chunks.size, ProgressState.AUDIO_GENERATION)
             audioUris.add(Uri.fromFile(File(context.filesDir, "audio/temp_$i.mp3")))
             synthesizeTextChunkToFile(
                 context,
@@ -52,6 +68,8 @@ class Android(context: Context) : TextToSpeech.OnInitListener, Provider {
             )
         }
 
+        Log.i("tts", "Starting to concat segments")
+        progressCallback(1.0, ProgressState.CONCATENATION)
         concatAudioFiles(context, audioUris, fileName)
     }
 
@@ -61,7 +79,7 @@ class Android(context: Context) : TextToSpeech.OnInitListener, Provider {
         text: WebsiteFetcher.LocalizedString,
         fileName: String,
     ): Boolean = suspendCancellableCoroutine { continuation ->
-        if (readyStatus != TextToSpeech.SUCCESS) {
+        if (!isReady) {
             continuation.resumeWithException(IllegalStateException("TTS engine not initialized"))
             return@suspendCancellableCoroutine
         }
@@ -91,6 +109,7 @@ class Android(context: Context) : TextToSpeech.OnInitListener, Provider {
             }
 
             override fun onError(utteranceIdParam: String, errorCode: Int) {
+                Log.i("tts", "Error code: $errorCode")
                 if (utteranceIdParam == utteranceId) {
                     continuation.resumeWithException(Exception("Synthesis error (error code $errorCode)"))
                 }
@@ -98,7 +117,8 @@ class Android(context: Context) : TextToSpeech.OnInitListener, Provider {
         }
 
         textToSpeech.setOnUtteranceProgressListener(utteranceProgressListener)
-        textToSpeech.language = Locale(text.langCode)
+        assert(text.langCode != null)
+        textToSpeech.language = Locale(text.langCode!!)
 
         textToSpeech.synthesizeToFile(text.string, params, fileDescriptor, utteranceId)
             .also { result ->

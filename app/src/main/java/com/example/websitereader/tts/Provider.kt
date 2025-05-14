@@ -1,12 +1,16 @@
 package com.example.websitereader.tts
 
-import android.content.Context
 import com.example.websitereader.WebsiteFetcher
+
+enum class ProgressState(val value: Int) {
+    AUDIO_GENERATION(1),
+    CONCATENATION(2)
+}
 
 interface Provider {
     suspend fun synthesizeTextToFile(
-        context: Context,
         text: WebsiteFetcher.LocalizedString,
-        fileName: String
+        fileName: String,
+        progressCallback: (Double, ProgressState) -> Unit
     )
 }

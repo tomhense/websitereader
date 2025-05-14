@@ -137,6 +137,7 @@ object Utils {
         }
     }
 
+    /*
     fun splitTextIntoChunks(text: String, maxChunkLength: Int): List<String> {
         val list = mutableListOf<String>()
         val words = text.split(" ")
@@ -150,5 +151,56 @@ object Utils {
         }
         list.add(chunk)
         return list
+     }
+     */
+
+    fun splitTextIntoChunks(text: String, maxChunkLength: Int): List<String> {
+        val result = mutableListOf<String>()
+        // Simple regex for splitting into sentences
+        val sentenceRegex = Regex("(?<=[.!?])\\s+")
+        val sentences = text.trim().split(sentenceRegex)
+
+        for (sentence in sentences) {
+            val trimmedSentence = sentence.trim()
+            if (trimmedSentence.length <= maxChunkLength) {
+                // Sentence fits into chunk
+                result.add(trimmedSentence)
+            } else {
+                // Split long sentence by words if possible
+                val words = trimmedSentence.split(" ")
+                var chunk = StringBuilder()
+                for (word in words) {
+                    // Word itself is too long, must be split
+                    if (word.length > maxChunkLength) {
+                        // Add previous chunk, if any
+                        if (chunk.isNotEmpty()) {
+                            result.add(chunk.toString().trim())
+                            chunk = StringBuilder()
+                        }
+                        // Split word
+                        var start = 0
+                        while (start < word.length) {
+                            val end = minOf(start + maxChunkLength, word.length)
+                            result.add(word.substring(start, end))
+                            start = end
+                        }
+                    } else {
+                        // Word fits, check if it fits in current chunk
+                        if (chunk.length + word.length + 1 > maxChunkLength) {
+                            if (chunk.isNotEmpty()) {
+                                result.add(chunk.toString().trim())
+                                chunk = StringBuilder()
+                            }
+                        }
+                        if (chunk.isNotEmpty()) chunk.append(" ")
+                        chunk.append(word)
+                    }
+                }
+                if (chunk.isNotEmpty()) {
+                    result.add(chunk.toString().trim())
+                }
+            }
+        }
+        return result
     }
 }
