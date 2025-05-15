@@ -11,6 +11,8 @@ import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
 import android.util.Patterns
+import android.view.View
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.LinearLayout
@@ -192,7 +194,7 @@ class ShareReceiver : AppCompatActivity() {
     private fun previewArticle(article: Article) {
         val intent = Intent(this, PreviewArticle::class.java)
         intent.putExtra(PreviewArticle.EXTRA_HEADLINE, article.headline)
-        intent.putExtra(PreviewArticle.EXTRA_CONTENT, article.text)
+        intent.putExtra(PreviewArticle.EXTRA_CONTENT, article.wholeText)
         startActivity(intent)
     }
 
@@ -273,6 +275,18 @@ class ShareReceiver : AppCompatActivity() {
         estimatedCostLabel.visibility = TextView.GONE
 
         // Setup language spinner
+        languageSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>, view: View?, position: Int, id: Long
+            ) {
+                val selectedLanguage = supportedLanguages[position].removeSuffix(" (auto detected)")
+                Log.i("tts", "Set article language to $selectedLanguage")
+                article!!.lang = selectedLanguage
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {}
+        }
+
         if (article!!.lang != null) {
             // Mark the auto detected language in the spinner
             val languageIndex = supportedLanguages.indexOf(article!!.lang)
@@ -280,6 +294,10 @@ class ShareReceiver : AppCompatActivity() {
                 supportedLanguages[languageIndex] += " (auto detected)"
                 languageSpinner.setSelection(languageIndex)
             }
+        } else {
+            Log.i("tts", "No language detected, falling back to default")
+            languageSpinner.setSelection(0)
+            article!!.lang = supportedLanguages[0]
         }
 
         // Setup preview button

@@ -13,7 +13,8 @@ class Article(
     val url: String,
     var lang: String?,
     val headline: String,
-    val text: String
+    val text: String,
+    val wholeText: String
 ) {
 
     companion object {
@@ -27,11 +28,24 @@ class Article(
                     val lang = ArticleUtils.determineLanguage(soup)
                     val readability4J = Readability4JExtended(url, html)
                     val article = readability4J.parse()
+
+                    // articleText contains trimmed and normalized text, linebreaks are also
+                    // removed this is perfect for TTS but less for a preview
                     val articleText = article.articleContent?.text()
+
+                    // wholeText contains untrimmed and unnormalized text, linebreaks are preserved,
+                    // perfect for a preview. But we should remove trim it a bit and remove excessive linebreaks
+                    val wholeText = article.articleContent?.wholeText()
+                        ?.trim() // Remove leading and trailing whitespace
+                        ?.replace(Regex("[ \\t]+"), " ") // collapse spaces/tabs into single space
+                        ?.replace(
+                            Regex("(\r?\n)+"), "\n"
+                        ) // collapse multiple linebreaks into single one
+
                     val headline = article.title ?: soup.title()
 
-                    if (articleText != null && headline != null) {
-                        Article(url, lang, headline, articleText)
+                    if (articleText != null && headline != null && wholeText != null) {
+                        Article(url, lang, headline, articleText, wholeText)
                     } else {
                         null
                     }
