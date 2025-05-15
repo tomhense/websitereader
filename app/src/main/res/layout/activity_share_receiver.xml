@@ -103,7 +103,7 @@
                     android:layout_width="48dp"
                     android:layout_height="48dp"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="@string/share_receive_preview_article_button"
+                    android:contentDescription="@string/share_receiver_preview_article_button"
                     android:src="@drawable/baseline_article_24" />
 
                 <!-- Generate Audio Button -->
@@ -112,9 +112,19 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:enabled="false"
-                    android:text="@string/share_receive_generate_audio_button" />
+                    android:text="@string/share_receiver_generate_audio_button" />
+
+                <!-- Save file Button -->
+                <ImageButton
+                    android:id="@+id/btnSaveFile"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/share_receiver_save_file_button"
+                    android:src="@drawable/baseline_save_24"
+                    android:visibility="gone" />
             </LinearLayout>
+
 
             <!-- Progress bar below the buttons -->
             <ProgressBar

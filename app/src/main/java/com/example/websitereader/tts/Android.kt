@@ -7,9 +7,9 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.widget.Toast
-import com.example.websitereader.WebsiteFetcher
 import com.example.websitereader.tts.Utils.concatAudioFiles
 import com.example.websitereader.tts.Utils.splitTextIntoChunks
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
@@ -18,11 +18,10 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.random.Random
 
-class Android(private val context: Context, private val initCallback: () -> Unit) :
+class Android(private val context: Context) :
     TextToSpeech.OnInitListener,
     Provider {
-    private var isReady: Boolean = false
-
+    override val isReady = CompletableDeferred<Unit>()
 
     private val textToSpeech = TextToSpeech(context, this)
 
@@ -36,22 +35,26 @@ class Android(private val context: Context, private val initCallback: () -> Unit
             ).show()
             throw IllegalStateException("ERROR INITIALIZING TTS")
         }
-        initCallback()
-        isReady = true
+        isReady.complete(Unit)
     }
 
     override suspend fun synthesizeTextToFile(
-        text: WebsiteFetcher.LocalizedString,
-        fileName: String,
+        text: String,
+        langCode: String,
+        outputFile: File,
         progressCallback: (Double, ProgressState) -> Unit
     ): Unit = coroutineScope {
-        val chunks = splitTextIntoChunks(text.string, TextToSpeech.getMaxSpeechInputLength())
+        // Wait for the TTS engine to be initialized
+        if (!isReady.isCompleted) {
+            isReady.await()
+        }
+
+        val chunks = splitTextIntoChunks(text, TextToSpeech.getMaxSpeechInputLength())
         val audioUris = ArrayList<Uri>()
 
-        Log.i("tts", "${chunks.size} chunks")
         Log.i("tts", "Max tts chunk length: ${TextToSpeech.getMaxSpeechInputLength()}")
         for (i in chunks.indices) {
-            Log.i("tts", "Chunk $i length: ${chunks[i].length}")
+            Log.i("tts", "Chunk ${i + 1} length: ${chunks[i].length}")
         }
 
         // Make sure dirs exist
@@ -60,32 +63,27 @@ class Android(private val context: Context, private val initCallback: () -> Unit
         // Processing the chunks in parallel seems not not work, so synchronous it is
         chunks.indices.map { i ->
             progressCallback(i.toDouble() / chunks.size, ProgressState.AUDIO_GENERATION)
-            audioUris.add(Uri.fromFile(File(context.filesDir, "audio/temp_$i.mp3")))
+
+            val tempFile = File(context.cacheDir, "$i.pcm")
+            audioUris.add(Uri.fromFile(tempFile))
             synthesizeTextChunkToFile(
-                context,
-                WebsiteFetcher.LocalizedString(chunks[i], text.langCode),
-                "audio/temp_$i.mp3",
+                chunks[i],
+                langCode,
+                tempFile
             )
         }
 
         Log.i("tts", "Starting to concat segments")
         progressCallback(1.0, ProgressState.CONCATENATION)
-        concatAudioFiles(context, audioUris, fileName)
+        concatAudioFiles(context, audioUris, outputFile)
     }
 
 
     private suspend fun synthesizeTextChunkToFile(
-        context: Context,
-        text: WebsiteFetcher.LocalizedString,
-        fileName: String,
+        text: String,
+        langCode: String,
+        file: File,
     ): Boolean = suspendCancellableCoroutine { continuation ->
-        if (!isReady) {
-            continuation.resumeWithException(IllegalStateException("TTS engine not initialized"))
-            return@suspendCancellableCoroutine
-        }
-
-        val fileDescriptor = File(context.filesDir, fileName)
-
         val params = Bundle()
         params.putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, "utteranceId")
 
@@ -117,10 +115,9 @@ class Android(private val context: Context, private val initCallback: () -> Unit
         }
 
         textToSpeech.setOnUtteranceProgressListener(utteranceProgressListener)
-        assert(text.langCode != null)
-        textToSpeech.language = Locale(text.langCode!!)
+        textToSpeech.language = Locale(langCode)
 
-        textToSpeech.synthesizeToFile(text.string, params, fileDescriptor, utteranceId)
+        textToSpeech.synthesizeToFile(text, params, file, utteranceId)
             .also { result ->
                 if (result != TextToSpeech.SUCCESS) {
                     continuation.resumeWithException(Exception("Error starting synthesis"))

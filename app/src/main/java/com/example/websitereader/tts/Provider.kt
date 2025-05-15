@@ -1,6 +1,7 @@
 package com.example.websitereader.tts
 
-import com.example.websitereader.WebsiteFetcher
+import kotlinx.coroutines.CompletableDeferred
+import java.io.File
 
 enum class ProgressState(val value: Int) {
     AUDIO_GENERATION(1),
@@ -8,9 +9,12 @@ enum class ProgressState(val value: Int) {
 }
 
 interface Provider {
+    val isReady: CompletableDeferred<Unit>
+
     suspend fun synthesizeTextToFile(
-        text: WebsiteFetcher.LocalizedString,
-        fileName: String,
+        text: String,
+        langCode: String,
+        outputFile: File,
         progressCallback: (Double, ProgressState) -> Unit
     )
 }

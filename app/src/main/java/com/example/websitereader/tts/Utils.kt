@@ -113,11 +113,10 @@ object Utils {
     suspend fun concatAudioFiles(
         context: Context,
         audioUris: List<Uri>,
-        outputPath: String
+        outputFile: File
     ): Boolean = suspendCancellableCoroutine { continuation ->
         try {
             // Create output file
-            val outputFile = File(outputPath)
             FileOutputStream(outputFile).use { outputStream ->
 
                 // Iterate over each audio file URI

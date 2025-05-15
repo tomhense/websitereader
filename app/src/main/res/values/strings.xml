@@ -5,7 +5,10 @@
     <string name="share_receiver_article_info_label">Words: %1$d | Characters: %2$d | Language: %3$s</string>
     <string name="share_receiver_tts_service_label">TTS Service</string>"
     <string name="share_receiver_estimated_cost_label">Estimated cost: %1$s</string>
-    <string name="share_receive_preview_article_button">Preview article</string>">
-    <string name="share_receive_generate_audio_button">Generate Audio</string>
+    <string name="share_receiver_preview_article_button">Preview article</string>
+    <string name="share_receiver_generate_audio_button">Generate Audio</string>
+    <string name="share_receiver_save_file_button">Save file</string>
     <string name="language">Language</string>
+    <string name="tts_generation_notification_title">TTS Generation</string>
+    <string name="tts_generation_notification_progress">Progress: %1$d%%</string>
 </resources>

@@ -1,29 +1,31 @@
 package com.example.websitereader
 
+import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.ServiceConnection
 import android.net.Uri
 import android.os.Bundle
+import android.os.IBinder
 import android.util.Log
 import android.util.Patterns
 import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.Spinner
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
-import androidx.lifecycle.lifecycleScope
+import androidx.appcompat.widget.AppCompatImageButton
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionToken
-import com.example.websitereader.tts.Android
-import com.example.websitereader.tts.ProgressState
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +39,7 @@ class PlaybackService : MediaSessionService() {
     // Create your Player and MediaSession in the onCreate lifecycle event
     override fun onCreate() {
         super.onCreate()
+
         val player = ExoPlayer.Builder(this).build()
         mediaSession = MediaSession.Builder(this, player).build()
     }
@@ -57,84 +60,114 @@ class PlaybackService : MediaSessionService() {
 }
 
 class ShareReceiver : AppCompatActivity() {
-    private val websiteFetcher = WebsiteFetcher()
-    private lateinit var tts: Android
     private val supportedLanguages = arrayOf("en-US", "de-DE")
-
+    private var foregroundService: ForegroundService? = null
+    private var bound = false
     private lateinit var controller: MediaController
+    private var outputFileUri: Uri? = null
+
+    private lateinit var progressBar: ProgressBar
+    private lateinit var languageSpinner: Spinner
+    private lateinit var ttsSpinner: Spinner
+    private lateinit var generateAudioButton: Button
+    private lateinit var previewButton: AppCompatImageButton
+    private lateinit var loadingProgressSpinner: ProgressBar
+    private lateinit var contentPanel: LinearLayout
+    private lateinit var estimatedCostLabel: TextView
+    private lateinit var articleInfo: TextView
+    private lateinit var urlLabel: TextView
+    private lateinit var saveFileButton: AppCompatImageButton
+
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as ForegroundService.LocalBinder
+            foregroundService = binder.getService()
+            bound = true
+
+            // Set the progress listener
+            binder.setProgressListener { progress ->
+                runOnUiThread {
+                    progressBar.progress = (progress * 100).toInt()
+                }
+            }
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            foregroundService = null
+            bound = false
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_share_receiver)
 
-        val languageSpinner = findViewById<Spinner>(R.id.spinnerLanguage)
+        // Initialize views
+        progressBar = findViewById(R.id.generationProgressBar)
+        languageSpinner = findViewById(R.id.spinnerLanguage)
+        ttsSpinner = findViewById(R.id.spinnerTts)
+        generateAudioButton = findViewById(R.id.btnGenerateAudio)
+        previewButton = findViewById(R.id.btnPreview)
+        loadingProgressSpinner = findViewById(R.id.loadingSpinner)
+        contentPanel = findViewById(R.id.contentPanel)
+        estimatedCostLabel = findViewById(R.id.tvEstimatedCost)
+        articleInfo = findViewById(R.id.tvArticleInfo)
+        urlLabel = findViewById(R.id.tvUrl)
+        saveFileButton = findViewById(R.id.btnSaveFile)
+
+        // Set outputFile
+        outputFileUri = Uri.fromFile(File(this@ShareReceiver.cacheDir, "output.pcm"))
+        Log.i("tts", "Output file uri: $outputFileUri")
+
+        // Setup spinners
         languageSpinner.adapter =
             ArrayAdapter(this, android.R.layout.simple_spinner_item, supportedLanguages)
-
-        val ttsSpinner = findViewById<Spinner>(R.id.spinnerTts)
         ttsSpinner.adapter =
             ArrayAdapter(this, android.R.layout.simple_spinner_item, arrayOf("Android", "OpenAI"))
 
+        // Setup media controller
         val sessionToken = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         val controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
         controllerFuture.addListener(
             {
-                //playerView.setPlayer(controllerFuture.get())
                 controller = controllerFuture.get()
             }, MoreExecutors.directExecutor()
         )
 
-        // Handle the incoming intent
+        // Handle incoming intents
         handleIncomingIntent()
-
-        tts = Android(this, initCallback = {
-            Log.i("tts", "TTS engine initialized")
-            findViewById<Button>(R.id.btnGenerateAudio).isEnabled = true
-        })
     }
 
-    override fun onDestroy() {
-        tts.onDestroy()
-        super.onDestroy()
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter("com.example.websitereader.AUDIO_GENERATION_COMPLETE")
+        LocalBroadcastManager.getInstance(this)
+            .registerReceiver(audioGenerationCompleteReceiver, filter)
     }
 
     private fun handleIncomingIntent() {
-        // Check if the intent has the type of a share action
         if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
-            // Get the shared text
-            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
-
-            // Check if the shared text is a URL
-            sharedText?.let { url ->
-                // Do something with the URL
-
-                val scope = CoroutineScope(Dispatchers.Main)
-                scope.launch {
+            intent.getStringExtra(Intent.EXTRA_TEXT)?.let { url ->
+                CoroutineScope(Dispatchers.Main).launch {
                     validateAndProcessSharedUrl(url)
                 }
             }
         }
     }
 
-
     private suspend fun validateAndProcessSharedUrl(sharedText: String) {
-        // Check if the shared text matches a URL pattern
         if (Patterns.WEB_URL.matcher(sharedText).matches()) {
             try {
                 val uri = URI(sharedText)
-                // Ensure it starts with http or https
                 if (uri.scheme.equals("http", ignoreCase = true) || uri.scheme.equals(
                         "https", ignoreCase = true
                     )
                 ) {
-                    // It's a valid URL, process further
-                    processSharedUrl(sharedText)
+                    processSharedUrl(sharedText) // Valid url
                 } else {
-                    // The URL does not start with http/https
                     Log.d("Invalid URL", "Only http/https URLs are supported.")
                 }
             } catch (e: Exception) {
-                // Handle the case where URI parsing fails
                 Log.d("Invalid URL", "Invalid URL format: ${e.message}")
             }
         } else {
@@ -142,9 +175,10 @@ class ShareReceiver : AppCompatActivity() {
         }
     }
 
-    private fun previewArticle(text: String) {
+    private fun previewArticle(article: Article) {
         val intent = Intent(this, PreviewArticle::class.java)
-        intent.putExtra("EXTRA_LONG_TEXT", text)
+        intent.putExtra(PreviewArticle.EXTRA_HEADLINE, article.headline)
+        intent.putExtra(PreviewArticle.EXTRA_CONTENT, article.text)
         startActivity(intent)
     }
 
@@ -155,93 +189,94 @@ class ShareReceiver : AppCompatActivity() {
         controller.play()
     }
 
-    private suspend fun generateAudio(content: WebsiteFetcher.LocalizedString) {
-        assert(content.langCode != null)
-        val progressBar = findViewById<ProgressBar>(R.id.generationProgressBar)
+    fun saveFile() {
+    }
+
+    private val audioGenerationCompleteReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            progressBar.visibility = ProgressBar.GONE
+            generateAudioButton.isEnabled = true
+            saveFileButton.visibility = AppCompatImageButton.VISIBLE
+
+            saveFileButton.setOnClickListener {
+                saveFile()
+            }
+
+            outputFileUri?.let { playAudio(it) }
+        }
+    }
+
+    private fun generateAudio(article: Article) {
         progressBar.visibility = ProgressBar.VISIBLE
-        findViewById<Button>(R.id.btnGenerateAudio).isEnabled = false // Disable the button
+        generateAudioButton.isEnabled = false // Disable the button
+        saveFileButton.visibility = AppCompatImageButton.GONE
 
-        val outputFile = File(this@ShareReceiver.filesDir, "audio/output.opus")
-
-        tts.synthesizeTextToFile(
-            content,
-            outputFile.absolutePath,
-            progressCallback = { progress: Double, state: ProgressState ->
-                runOnUiThread {
-                    if (state == ProgressState.AUDIO_GENERATION) {
-                        progressBar.progressDrawable.setTint(getColor(R.color.teal_200))
-                    } else {
-                        progressBar.progressDrawable.setTint(getColor(R.color.purple_500))
-                    }
-                    progressBar.progress = (progress * 100).toInt()
-                }
-            })
-
-        progressBar.visibility = ProgressBar.GONE
-        findViewById<Button>(R.id.btnGenerateAudio).isEnabled = true // Enable the button
-
-        val fileUri = FileProvider.getUriForFile(
-            this@ShareReceiver,
-            this@ShareReceiver.packageName + ".fileprovider",
-            outputFile,
+        val intent = Intent(this, ForegroundService::class.java)
+        intent.putExtra(
+            ForegroundService.EXTRA_PROVIDER_CLASS_NAME, "com.example.websitereader.tts.Android"
         )
-
-        Log.i("tts", "File URI: $fileUri")
-
-        playAudio(fileUri)
-
-        /*
-        val intent = Intent(Intent.ACTION_VIEW)
-        intent.setDataAndType(fileUri, "audio/ogg")
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        startActivity(intent)
-         */
+        intent.putExtra(ForegroundService.EXTRA_TEXT, article.text)
+        intent.putExtra(ForegroundService.EXTRA_LANG, article.lang)
+        intent.putExtra(ForegroundService.EXTRA_FILE_URI, outputFileUri.toString())
+        startService(intent).also {
+            bindService(intent, connection, BIND_AUTO_CREATE)
+        }
     }
 
     private suspend fun processSharedUrl(sharedUrl: String) {
         // Set the url in the ui label
-        findViewById<TextView>(R.id.tvUrl).text =
-            getString(R.string.share_receiver_url_label, sharedUrl)
+        urlLabel.text = getString(R.string.share_receiver_url_label, sharedUrl)
 
-        val content = websiteFetcher.processUrl(sharedUrl)
-        if (content != null) {
-            Log.i("lang", content.langCode ?: "Unknown")
+        // Get the article from the url, this will take a while
+        val article = Article.fromUrl(sharedUrl)
+        if (article == null) {
+            Log.i("article", "Article is null")
+            return
+        }
 
-            // Show the rest of the ui (and hide the progress bar)
-            findViewById<LinearLayout>(R.id.contentPanel).visibility = LinearLayout.VISIBLE
-            findViewById<ProgressBar>(R.id.loadingSpinner).visibility = ProgressBar.GONE
+        // Now we have an article, setup the ui further
+        contentPanel.visibility = LinearLayout.VISIBLE
+        loadingProgressSpinner.visibility = ProgressBar.GONE
+        articleInfo.text = getString(
+            R.string.share_receiver_article_info_label,
+            article.text.split(" ").size,
+            article.text.length,
+            article.lang ?: "Unknown"
+        )
 
-            findViewById<TextView>(R.id.tvArticleInfo).text = getString(
-                R.string.share_receiver_article_info_label,
-                content.string.split(" ").size,
-                content.string.length,
-                content.langCode ?: "Unknown"
-            )
+        // Set the estimated cost
+        estimatedCostLabel.visibility = TextView.GONE
 
-            // Set the estimated cost
-            findViewById<TextView>(R.id.tvEstimatedCost).visibility = TextView.GONE
-
-            if (content.langCode == null) {
-                // If no locale is defined fall back to english
-                content.langCode = "en_US"
-            } else {
-                // Set the preselected language in the spinner
-                val languageIndex = supportedLanguages.indexOf(content.langCode)
-                if (languageIndex != -1) {
-                    supportedLanguages[languageIndex] += " (auto detected)"
-                    findViewById<Spinner>(R.id.spinnerLanguage).setSelection(languageIndex)
-                }
-            }
-
-            findViewById<ImageButton>(R.id.btnPreview).setOnClickListener {
-                previewArticle(content.string)
-            }
-
-            findViewById<Button>(R.id.btnGenerateAudio).setOnClickListener {
-                lifecycleScope.launch {
-                    generateAudio(content)
-                }
+        // Setup language spinner
+        if (article.lang != null) {
+            // Mark the auto detected language in the spinner
+            val languageIndex = supportedLanguages.indexOf(article.lang)
+            if (languageIndex != -1) {
+                supportedLanguages[languageIndex] += " (auto detected)"
+                languageSpinner.setSelection(languageIndex)
             }
         }
+
+        // Setup preview button
+        previewButton.setOnClickListener {
+            previewArticle(article)
+        }
+
+        generateAudioButton.setOnClickListener {
+            generateAudio(article)
+        }
+    }
+
+    override fun onStop() {
+        if (bound) {
+            unbindService(connection)
+            bound = false
+        }
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(audioGenerationCompleteReceiver)
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
     }
 }
