@@ -6,7 +6,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.widget.Toast
-import com.example.websitereader.tts.Utils.concatAudioFiles
+import com.example.websitereader.tts.Utils.concatWaveFiles
 import com.example.websitereader.tts.Utils.splitTextIntoChunks
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
@@ -71,7 +71,8 @@ class Android(private val context: Context) :
 
         Log.i("tts", "Starting to concat segments")
         progressCallback(1.0, ProgressState.CONCATENATION)
-        concatAudioFiles(tempAudioFiles, outputFile)
+        //concatAudioFiles(tempAudioFiles, outputFile)
+        concatWaveFiles(tempAudioFiles, outputFile)
 
         // Clean up temp files
         Log.i("tts", "Cleaning up temp files")
