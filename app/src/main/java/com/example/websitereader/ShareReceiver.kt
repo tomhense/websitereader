@@ -17,6 +17,8 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.AppCompatImageButton
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
@@ -63,6 +65,7 @@ class ShareReceiver : AppCompatActivity() {
     private val supportedLanguages = arrayOf("en-US", "de-DE")
     private var foregroundService: ForegroundService? = null
     private var bound = false
+    private var article: Article? = null
     private lateinit var controller: MediaController
     private var outputFileUri: Uri? = null
 
@@ -98,6 +101,17 @@ class ShareReceiver : AppCompatActivity() {
         }
     }
 
+    private val createFileLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { destUri: Uri? ->
+            if (destUri != null && outputFileUri != null) {
+                copyFile(outputFileUri!!, destUri)
+            } else {
+                Toast.makeText(
+                    this, "File not saved (no destination selected).", Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_share_receiver)
@@ -116,7 +130,7 @@ class ShareReceiver : AppCompatActivity() {
         saveFileButton = findViewById(R.id.btnSaveFile)
 
         // Set outputFile
-        outputFileUri = Uri.fromFile(File(this@ShareReceiver.cacheDir, "output.pcm"))
+        outputFileUri = Uri.fromFile(File(this@ShareReceiver.cacheDir, "output.wav"))
         Log.i("tts", "Output file uri: $outputFileUri")
 
         // Setup spinners
@@ -189,7 +203,18 @@ class ShareReceiver : AppCompatActivity() {
         controller.play()
     }
 
-    fun saveFile() {
+    private fun copyFile(sourceUri: Uri, destUri: Uri) {
+        try {
+            contentResolver.openInputStream(sourceUri)?.use { inputStream ->
+                contentResolver.openOutputStream(destUri)?.use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+            Toast.makeText(this, "File copied successfully!", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "Error copying file: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private val audioGenerationCompleteReceiver = object : BroadcastReceiver() {
@@ -199,7 +224,7 @@ class ShareReceiver : AppCompatActivity() {
             saveFileButton.visibility = AppCompatImageButton.VISIBLE
 
             saveFileButton.setOnClickListener {
-                saveFile()
+                createFileLauncher.launch("audio.wav")
             }
 
             outputFileUri?.let { playAudio(it) }
@@ -228,7 +253,7 @@ class ShareReceiver : AppCompatActivity() {
         urlLabel.text = getString(R.string.share_receiver_url_label, sharedUrl)
 
         // Get the article from the url, this will take a while
-        val article = Article.fromUrl(sharedUrl)
+        article = Article.fromUrl(sharedUrl)
         if (article == null) {
             Log.i("article", "Article is null")
             return
@@ -239,18 +264,18 @@ class ShareReceiver : AppCompatActivity() {
         loadingProgressSpinner.visibility = ProgressBar.GONE
         articleInfo.text = getString(
             R.string.share_receiver_article_info_label,
-            article.text.split(" ").size,
-            article.text.length,
-            article.lang ?: "Unknown"
+            article!!.text.split(" ").size,
+            article!!.text.length,
+            article!!.lang ?: "Unknown"
         )
 
         // Set the estimated cost
         estimatedCostLabel.visibility = TextView.GONE
 
         // Setup language spinner
-        if (article.lang != null) {
+        if (article!!.lang != null) {
             // Mark the auto detected language in the spinner
-            val languageIndex = supportedLanguages.indexOf(article.lang)
+            val languageIndex = supportedLanguages.indexOf(article!!.lang)
             if (languageIndex != -1) {
                 supportedLanguages[languageIndex] += " (auto detected)"
                 languageSpinner.setSelection(languageIndex)
@@ -259,11 +284,11 @@ class ShareReceiver : AppCompatActivity() {
 
         // Setup preview button
         previewButton.setOnClickListener {
-            previewArticle(article)
+            previewArticle(article!!)
         }
 
         generateAudioButton.setOnClickListener {
-            generateAudio(article)
+            generateAudio(article!!)
         }
     }
 

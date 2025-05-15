@@ -1,7 +1,6 @@
 package com.example.websitereader.tts
 
 import android.content.Context
-import android.net.Uri
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
@@ -47,25 +46,22 @@ class Android(private val context: Context) :
         // Wait for the TTS engine to be initialized
         if (!isReady.isCompleted) {
             isReady.await()
+            Log.i("tts", "TTS engine initialized")
         }
 
-        val chunks = splitTextIntoChunks(text, TextToSpeech.getMaxSpeechInputLength())
-        val audioUris = ArrayList<Uri>()
-
+        // Create chunks from the long given text which the TTS can ingest
         Log.i("tts", "Max tts chunk length: ${TextToSpeech.getMaxSpeechInputLength()}")
+        val chunks = splitTextIntoChunks(text, TextToSpeech.getMaxSpeechInputLength())
         for (i in chunks.indices) {
             Log.i("tts", "Chunk ${i + 1} length: ${chunks[i].length}")
         }
 
-        // Make sure dirs exist
-        File(context.filesDir, "audio").mkdirs()
-
         // Processing the chunks in parallel seems not not work, so synchronous it is
+        val tempAudioFiles = ArrayList<File>()
         chunks.indices.map { i ->
             progressCallback(i.toDouble() / chunks.size, ProgressState.AUDIO_GENERATION)
-
-            val tempFile = File(context.cacheDir, "$i.pcm")
-            audioUris.add(Uri.fromFile(tempFile))
+            val tempFile = File(context.cacheDir, "$i.wav")
+            tempAudioFiles.add(tempFile)
             synthesizeTextChunkToFile(
                 chunks[i],
                 langCode,
@@ -75,7 +71,11 @@ class Android(private val context: Context) :
 
         Log.i("tts", "Starting to concat segments")
         progressCallback(1.0, ProgressState.CONCATENATION)
-        concatAudioFiles(context, audioUris, outputFile)
+        concatAudioFiles(tempAudioFiles, outputFile)
+
+        // Clean up temp files
+        Log.i("tts", "Cleaning up temp files")
+        tempAudioFiles.forEach { it.delete() }
     }
 
 

@@ -8,6 +8,7 @@ import android.media.MediaMuxer
 import android.net.Uri
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.nio.ByteBuffer
@@ -109,49 +110,26 @@ object Utils {
         }
     }
 
-    // Does a simple byte for byte concat of audio files, this of course only works for wav & pcm
     suspend fun concatAudioFiles(
-        context: Context,
-        audioUris: List<Uri>,
+        audioFiles: List<File>,
         outputFile: File
     ): Boolean = suspendCancellableCoroutine { continuation ->
         try {
             // Create output file
             FileOutputStream(outputFile).use { outputStream ->
-
-                // Iterate over each audio file URI
-                audioUris.forEach { uri ->
-                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                // Iterate over each audio file
+                audioFiles.forEach { file ->
+                    FileInputStream(file).use { inputStream ->
                         copyStream(inputStream, outputStream)
-                    } ?: throw IllegalArgumentException("Unable to open URI: $uri")
+                    }
                 }
             }
-
             // Signal success
             continuation.resume(true)
-
         } catch (e: Exception) {
-            // Signal failure
             continuation.resumeWithException(e)
         }
     }
-
-    /*
-    fun splitTextIntoChunks(text: String, maxChunkLength: Int): List<String> {
-        val list = mutableListOf<String>()
-        val words = text.split(" ")
-        var chunk = ""
-        for (word in words) {
-            if ((chunk + word).length >= maxChunkLength) {
-                list.add(chunk)
-                chunk = ""
-            }
-            chunk += "$word "
-        }
-        list.add(chunk)
-        return list
-     }
-     */
 
     fun splitTextIntoChunks(text: String, maxChunkLength: Int): List<String> {
         val result = mutableListOf<String>()
