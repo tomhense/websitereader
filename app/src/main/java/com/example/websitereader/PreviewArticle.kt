@@ -3,6 +3,8 @@ package com.example.websitereader
 import android.os.Bundle
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 class PreviewArticle : AppCompatActivity() {
     companion object {
@@ -13,6 +15,14 @@ class PreviewArticle : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_preview_article)
+
+        // Adjust the height of the spacer to match the status bar height
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.statusBarSpacer)) { view, insets ->
+            val statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            view.layoutParams.height = statusBarHeight
+            view.requestLayout()
+            insets
+        }
 
         // Get parameters passed to the intent
         val content = intent.getStringExtra(EXTRA_CONTENT)

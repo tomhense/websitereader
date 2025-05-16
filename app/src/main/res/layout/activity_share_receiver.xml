@@ -1,44 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface">
 
     <LinearLayout
+        android:id="@+id/rootPanel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:paddingStart="24dp"
+        android:paddingTop="32dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="32dp">
 
         <!-- Headline -->
-        <TextView
+        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/tvHeadline"
+            style="@style/TextAppearance.Material3.HeadlineMedium"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:paddingBottom="16dp"
-            android:text="@string/share_receiver_headline"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textStyle="bold" />
+            android:layout_marginBottom="16dp"
+            android:text="@string/share_receiver_headline" />
 
         <!-- URL -->
-        <TextView
+        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/tvUrl"
+            style="@style/TextAppearance.Material3.BodySmall"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:paddingBottom="12dp"
-            android:text="@string/share_receiver_url_label"
-            android:textAppearance="?android:attr/textAppearanceSmall" />
+            android:text="@string/share_receiver_url_label" />
 
-        <!-- Loading Spinner (visible at start) -->
-        <ProgressBar
+        <!-- Loading Spinner -->
+        <com.google.android.material.progressindicator.CircularProgressIndicator
             android:id="@+id/loadingSpinner"
-            style="?android:attr/progressBarStyleLarge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:padding="32dp"
-            android:visibility="visible" />
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp"
+            android:visibility="visible"
+            app:indicatorSize="48dp" />
 
         <!-- Content panel (hidden at start) -->
         <LinearLayout
@@ -48,95 +54,122 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-            <!-- Article Info: Word/Char count and Language -->
-            <TextView
+            <!-- Article Info -->
+            <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/tvArticleInfo"
+                style="@style/TextAppearance.Material3.BodyMedium"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:paddingBottom="18dp"
+                android:layout_marginBottom="16dp"
                 android:text="@string/share_receiver_article_info_label" />
 
             <!-- Language Selector -->
-            <TextView
+            <com.google.android.material.textview.MaterialTextView
+                style="@style/TextAppearance.Material3.TitleSmall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:paddingBottom="4dp"
+                android:layout_marginBottom="2dp"
                 android:text="@string/language" />
 
-            <Spinner
-                android:id="@+id/spinnerLanguage"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingBottom="14dp" />
+                android:layout_marginBottom="12dp">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/spinnerLanguage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <!-- TTS Selector -->
-            <TextView
+            <com.google.android.material.textview.MaterialTextView
+                style="@style/TextAppearance.Material3.TitleSmall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:paddingBottom="4dp"
+                android:layout_marginBottom="2dp"
                 android:text="@string/share_receiver_tts_service_label" />
 
-            <Spinner
-                android:id="@+id/spinnerTts"
+            <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingBottom="14dp" />
+                android:layout_marginBottom="12dp">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/spinnerTts"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <!-- Estimated Cost -->
-            <TextView
+            <com.google.android.material.textview.MaterialTextView
                 android:id="@+id/tvEstimatedCost"
+                style="@style/TextAppearance.Material3.BodySmall"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:paddingBottom="24dp"
+                android:layout_marginBottom="16dp"
                 android:text="@string/share_receiver_estimated_cost_label" />
 
             <!-- Bottom Button Row -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:gravity="end"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="4dp"
+                android:baselineAligned="false"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <!-- Preview Icon Button -->
-                <ImageButton
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnPreview"
+                    style="@style/Widget.Material3.Button.Icon"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:layout_marginEnd="8dp"
+                    android:backgroundTint="?attr/colorSecondaryContainer"
                     android:contentDescription="@string/share_receiver_preview_article_button"
-                    android:src="@drawable/baseline_article_24" />
+                    app:icon="@drawable/baseline_article_24"
+                    app:iconTint="?attr/colorOnSecondaryContainer" />
 
                 <!-- Generate Audio Button -->
-                <Button
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnGenerateAudio"
+                    style="@style/Widget.Material3.Button"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="8dp"
                     android:layout_weight="1"
                     android:text="@string/share_receiver_generate_audio_button" />
 
-                <!-- Save file Button -->
-                <ImageButton
+                <!-- Save File Icon Button (hidden by default) -->
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnSaveFile"
+                    style="@style/Widget.Material3.Button.Icon"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:backgroundTint="?attr/colorSecondaryContainer"
                     android:contentDescription="@string/share_receiver_save_file_button"
-                    android:src="@drawable/baseline_save_24"
-                    android:visibility="gone" />
+                    android:visibility="gone"
+                    app:icon="@drawable/baseline_save_24"
+                    app:iconGravity="textStart"
+                    app:iconTint="?attr/colorOnSecondaryContainer" />
             </LinearLayout>
 
-
-            <!-- Progress bar below the buttons -->
-            <ProgressBar
+            <!-- Generation Progress Bar -->
+            <com.google.android.material.progressindicator.LinearProgressIndicator
                 android:id="@+id/generationProgressBar"
-                style="?android:attr/progressBarStyleHorizontal"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:layout_marginBottom="8dp"
-                android:visibility="gone" />
+                android:layout_height="8dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="0dp"
+                android:visibility="gone"
+                app:trackCornerRadius="4dp" />
 
         </LinearLayout>
-
     </LinearLayout>
 </ScrollView>

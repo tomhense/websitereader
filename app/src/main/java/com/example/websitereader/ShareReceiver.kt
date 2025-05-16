@@ -14,15 +14,14 @@ import android.util.Patterns
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.Spinner
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.AppCompatImageButton
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
@@ -30,6 +29,11 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionToken
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.progressindicator.CircularProgressIndicator
+import com.google.android.material.progressindicator.LinearProgressIndicator
+import com.google.android.material.textfield.MaterialAutoCompleteTextView
+import com.google.android.material.textview.MaterialTextView
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -71,17 +75,17 @@ class ShareReceiver : AppCompatActivity() {
     private lateinit var controller: MediaController
     private var outputFileUri: Uri? = null
 
-    private lateinit var progressBar: ProgressBar
-    private lateinit var languageSpinner: Spinner
-    private lateinit var ttsSpinner: Spinner
-    private lateinit var generateAudioButton: Button
-    private lateinit var previewButton: AppCompatImageButton
-    private lateinit var loadingProgressSpinner: ProgressBar
+    private lateinit var progressBar: LinearProgressIndicator
+    private lateinit var languageSpinner: MaterialAutoCompleteTextView
+    private lateinit var ttsSpinner: MaterialAutoCompleteTextView
+    private lateinit var generateAudioButton: MaterialButton
+    private lateinit var previewButton: MaterialButton
+    private lateinit var loadingProgressSpinner: CircularProgressIndicator
     private lateinit var contentPanel: LinearLayout
-    private lateinit var estimatedCostLabel: TextView
-    private lateinit var articleInfo: TextView
-    private lateinit var urlLabel: TextView
-    private lateinit var saveFileButton: AppCompatImageButton
+    private lateinit var estimatedCostLabel: MaterialTextView
+    private lateinit var articleInfo: MaterialTextView
+    private lateinit var urlLabel: MaterialTextView
+    private lateinit var saveFileButton: MaterialButton
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -118,6 +122,19 @@ class ShareReceiver : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_share_receiver)
 
+        // Handle insets dynamically (required for android 15)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.rootPanel)) { v, insets ->
+            val sysInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.updatePadding(
+                top = sysInsets.top,
+                bottom = sysInsets.bottom,
+                left = v.paddingLeft,
+                right = v.paddingRight,
+            )
+            WindowInsetsCompat.CONSUMED
+        }
+
         // Initialize views
         progressBar = findViewById(R.id.generationProgressBar)
         languageSpinner = findViewById(R.id.spinnerLanguage)
@@ -136,10 +153,16 @@ class ShareReceiver : AppCompatActivity() {
         Log.i("tts", "Output file uri: $outputFileUri")
 
         // Setup spinners
-        languageSpinner.adapter =
-            ArrayAdapter(this, android.R.layout.simple_spinner_item, supportedLanguages)
-        ttsSpinner.adapter =
-            ArrayAdapter(this, android.R.layout.simple_spinner_item, arrayOf("Android", "OpenAI"))
+        languageSpinner.setAdapter(
+            ArrayAdapter(
+                this,
+                android.R.layout.simple_list_item_1,
+                supportedLanguages
+            )
+        )
+        ttsSpinner.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_list_item_1, arrayOf("Android", "OpenAI"))
+        )
 
         // Setup media controller
         val sessionToken = SessionToken(this, ComponentName(this, PlaybackService::class.java))
@@ -221,9 +244,9 @@ class ShareReceiver : AppCompatActivity() {
 
     private val audioGenerationCompleteReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            progressBar.visibility = ProgressBar.GONE
+            progressBar.visibility = LinearProgressIndicator.GONE
             generateAudioButton.isEnabled = true
-            saveFileButton.visibility = AppCompatImageButton.VISIBLE
+            saveFileButton.visibility = MaterialButton.VISIBLE
 
             saveFileButton.setOnClickListener {
                 createFileLauncher.launch("audio.wav")
@@ -234,9 +257,9 @@ class ShareReceiver : AppCompatActivity() {
     }
 
     private fun generateAudio(article: Article) {
-        progressBar.visibility = ProgressBar.VISIBLE
+        progressBar.visibility = LinearProgressIndicator.VISIBLE
         generateAudioButton.isEnabled = false // Disable the button
-        saveFileButton.visibility = AppCompatImageButton.GONE
+        saveFileButton.visibility = MaterialButton.GONE
 
         val intent = Intent(this, ForegroundService::class.java)
         intent.putExtra(
@@ -263,7 +286,7 @@ class ShareReceiver : AppCompatActivity() {
 
         // Now we have an article, setup the ui further
         contentPanel.visibility = LinearLayout.VISIBLE
-        loadingProgressSpinner.visibility = ProgressBar.GONE
+        loadingProgressSpinner.visibility = CircularProgressIndicator.GONE
         articleInfo.text = getString(
             R.string.share_receiver_article_info_label,
             article!!.text.split(" ").size,
@@ -272,7 +295,7 @@ class ShareReceiver : AppCompatActivity() {
         )
 
         // Set the estimated cost
-        estimatedCostLabel.visibility = TextView.GONE
+        estimatedCostLabel.visibility = MaterialTextView.GONE
 
         // Setup language spinner
         languageSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -288,15 +311,19 @@ class ShareReceiver : AppCompatActivity() {
         }
 
         if (article!!.lang != null) {
-            // Mark the auto detected language in the spinner
+            // Find index of detected language
             val languageIndex = supportedLanguages.indexOf(article!!.lang)
             if (languageIndex != -1) {
-                supportedLanguages[languageIndex] += " (auto detected)"
-                languageSpinner.setSelection(languageIndex)
+                // Optionally, create a new list or update the displayed value
+                val displayLanguages = supportedLanguages.toMutableList()
+                displayLanguages[languageIndex] += " (auto detected)"
+
+                // Set text to the selected item
+                languageSpinner.setText(displayLanguages[languageIndex], false)
             }
         } else {
             Log.i("tts", "No language detected, falling back to default")
-            languageSpinner.setSelection(0)
+            languageSpinner.setText(supportedLanguages[0], false)
             article!!.lang = supportedLanguages[0]
         }
 
