@@ -24,7 +24,8 @@
             style="@style/TextAppearance.Material3.HeadlineMedium"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingBottom="8dp" />
+            android:paddingBottom="8dp"
+            android:textIsSelectable="true" />
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/textViewLongText"
@@ -32,6 +33,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:lineSpacingExtra="4dp"
-            android:lineSpacingMultiplier="1.2" />
+            android:lineSpacingMultiplier="1.2"
+            android:textIsSelectable="true" />
     </LinearLayout>
 </ScrollView>
