@@ -1,24 +1,17 @@
 package com.example.websitereader
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Binder
 import android.os.Build
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.websitereader.tts.ProgressState
-import com.example.websitereader.tts.Provider
+import com.example.websitereader.tts.TTSProviderFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,17 +22,11 @@ import kotlin.coroutines.cancellation.CancellationException
 
 class ForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     private val binder = LocalBinder()
     private var progressListener: ((Double) -> Unit)? = null
-    private val handler = Handler(Looper.getMainLooper())
-    private var progress: Double = 0.0
-    private var isRunning = false
-
 
     inner class LocalBinder : Binder() {
         fun getService() = this@ForegroundService
-
         fun setProgressListener(listener: (Double) -> Unit) {
             progressListener = listener
         }
@@ -56,123 +43,108 @@ class ForegroundService : Service() {
         const val EXTRA_TEXT = "TEXT"
         const val EXTRA_LANG = "LANG"
         const val EXTRA_FILE_URI = "FILE_URI"
+        const val ACTION_STOP = "STOP_SERVICE"
+        const val BROADCAST_COMPLETE = "com.example.websitereader.AUDIO_GENERATION_COMPLETE"
+        const val BROADCAST_FAILED = "com.example.websitereader.AUDIO_GENERATION_FAILED"
     }
 
+    private lateinit var notificationHelper: ForegroundNotificationHelper
+
+    override fun onCreate() {
+        super.onCreate()
+        notificationHelper =
+            ForegroundNotificationHelper(this, CHANNEL_ID, "Foreground Service Channel")
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // 1. Handle Stop Action (top of method)
-        if (intent?.action == "STOP_SERVICE") {
+        // 1. Stop Action
+        if (intent?.action == ACTION_STOP) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             serviceScope.cancel()
             return START_NOT_STICKY
         }
 
+        // 2. Parameters
         val providerClassName = intent?.getStringExtra(EXTRA_PROVIDER_CLASS_NAME)
         val text = intent?.getStringExtra(EXTRA_TEXT)
         val lang = intent?.getStringExtra(EXTRA_LANG)
         val fileUriString = intent?.getStringExtra(EXTRA_FILE_URI)
+
         if (providerClassName == null || text == null || lang == null || fileUriString == null) {
             stopSelf()
             return START_NOT_STICKY
         }
-        Log.i("tts", "Starting foreground service")
 
-        // 2. Create notification channel (unchanged)
-        val channel = NotificationChannel(
-            CHANNEL_ID, "Foreground Service Channel", NotificationManager.IMPORTANCE_LOW
-        )
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(channel)
+        // 3. Notification Channel
+        notificationHelper.createChannel()
 
-        // 3. Create "Stop" PendingIntent
+        // 4. Stop PendingIntent
         val stopIntent = Intent(this, ForegroundService::class.java).apply {
-            action = "STOP_SERVICE"
+            action = ACTION_STOP
         }
         val pendingStopIntent = PendingIntent.getService(
             this, 101, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 4. Create notification builder with action button
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(getString(R.string.tts_generation_notification_title))
-            .setContentText(getString(R.string.tts_generation_notification_progress, 0))
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setPriority(NotificationCompat.PRIORITY_LOW).setOnlyAlertOnce(true).setOngoing(true)
-            .setProgress(100, 0, false).addAction(
-                R.drawable.baseline_stop_24, // Choose a suitable stop icon
-                getString(R.string.stop), // "Stop"
-                pendingStopIntent
-            )
-
-        // Check POST_NOTIFICATIONS permission (unchanged)
+        // 5. Initial Notification
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             stopSelf()
             return START_NOT_STICKY
         }
-
-        startForeground(NOTIFICATION_ID, builder.build())
+        val notificationBuilder = notificationHelper.buildNotification(
+            progress = 0, stopActionIntent = pendingStopIntent
+        )
+        startForeground(NOTIFICATION_ID, notificationBuilder.build())
         val notificationManager = NotificationManagerCompat.from(this)
-        val providerInstance = try {
-            val clazz = Class.forName(providerClassName)
-            val cons = clazz.getDeclaredConstructor(Context::class.java)
-            cons.isAccessible = true
-            cons.newInstance(this) as Provider
-        } catch (e: Exception) {
-            e.printStackTrace()
+
+        // 6. TTS Provider
+        val providerInstance = TTSProviderFactory.createProvider(providerClassName, this)
+        if (providerInstance == null) {
             stopSelf()
             return START_NOT_STICKY
         }
-
-        // Get output file
         val outputFile = File(fileUriString.toUri().path!!)
 
-        // Run the suspend function inside a coroutine
+        // 7. Coroutine
         serviceScope.launch {
             try {
                 providerInstance.synthesizeTextToFile(
                     text = text,
                     langCode = lang,
                     outputFile = outputFile,
-                    progressCallback = { progress: Double, state: ProgressState ->
+                    progressCallback = { progress: Double, _: ProgressState ->
                         progressListener?.invoke(progress)
-                        val progressInt = (progress * 100).toInt()
-                        builder.setProgress(100, progressInt, false).setContentText(
-                            getString(
-                                R.string.tts_generation_notification_progress, progressInt
-                            )
+                        val progInt = (progress * 100).toInt()
+                        notificationBuilder.setProgress(100, progInt, false).setContentText(
+                            getString(R.string.tts_generation_notification_progress, progInt)
                         )
-                        notificationManager.notify(NOTIFICATION_ID, builder.build())
+                        notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build())
                     })
-                val doneIntent = Intent("com.example.websitereader.AUDIO_GENERATION_COMPLETE")
-                LocalBroadcastManager.getInstance(this@ForegroundService).sendBroadcast(doneIntent)
+                ServiceBroadcastHelper.send(this@ForegroundService, BROADCAST_COMPLETE)
                 stopForeground(STOP_FOREGROUND_REMOVE)
-            } catch (_: CancellationException) {
-                val failedIntent = Intent("com.example.websitereader.AUDIO_GENERATION_FAILED")
-                LocalBroadcastManager.getInstance(this@ForegroundService)
-                    .sendBroadcast(failedIntent)
+            } catch (e: CancellationException) {
+                ServiceBroadcastHelper.send(this@ForegroundService, BROADCAST_FAILED)
                 Log.i("ForegroundService", "Cancelled by user or system, no error notification.")
             } catch (e: Exception) {
                 e.printStackTrace()
-                builder.setContentText("Task failed").setProgress(0, 0, false)
-                notificationManager.notify(NOTIFICATION_ID, builder.build())
-
-                val failedIntent = Intent("com.example.websitereader.AUDIO_GENERATION_FAILED")
-                LocalBroadcastManager.getInstance(this@ForegroundService)
-                    .sendBroadcast(failedIntent)
+                notificationBuilder.setContentText("Task failed").setProgress(0, 0, false)
+                notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build())
+                ServiceBroadcastHelper.send(this@ForegroundService, BROADCAST_FAILED)
             } finally {
                 stopSelf()
             }
         }
+
         return START_NOT_STICKY
+    }
+
+    override fun onBind(intent: Intent?): IBinder {
+        return binder
     }
 
     override fun onDestroy() {
         super.onDestroy()
         serviceScope.cancel()
-    }
-
-    override fun onBind(intent: Intent?): IBinder {
-        return binder
     }
 }
