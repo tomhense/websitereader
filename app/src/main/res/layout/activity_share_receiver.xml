@@ -155,7 +155,6 @@
                     android:contentDescription="@string/share_receiver_save_file_button"
                     android:visibility="gone"
                     app:icon="@drawable/baseline_save_24"
-                    app:iconGravity="textStart"
                     app:iconTint="?attr/colorOnSecondaryContainer" />
             </LinearLayout>
 

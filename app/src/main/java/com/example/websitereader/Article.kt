@@ -35,12 +35,12 @@ class Article(
 
                     // wholeText contains untrimmed and unnormalized text, linebreaks are preserved,
                     // perfect for a preview. But we should remove trim it a bit and remove excessive linebreaks
-                    val wholeText = article.articleContent?.wholeText()
-                        ?.trim() // Remove leading and trailing whitespace
-                        ?.replace(Regex("[ \\t]+"), " ") // collapse spaces/tabs into single space
-                        ?.replace(
-                            Regex("(\r?\n)+"), "\n"
-                        ) // collapse multiple linebreaks into single one
+                    var wholeText = article.articleContent?.wholeText()
+                        ?.trim()
+                        ?.replace(Regex("[ \\t]+"), " ")
+                        ?.replace(Regex("\r\n"), "\n")
+                        ?.replace(Regex(" *(\n+) *"), "$1")
+                        ?.replace(Regex("\n{2,}"), "\n\n")
 
                     val headline = article.title ?: soup.title()
 
