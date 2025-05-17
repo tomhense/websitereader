@@ -1,12 +1,15 @@
 package com.example.websitereader
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
@@ -16,8 +19,11 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -74,6 +80,7 @@ class ShareReceiver : AppCompatActivity() {
     private var article: Article? = null
     private lateinit var controller: MediaController
     private var outputFileUri: Uri? = null
+    private lateinit var requestNotificationPermissionLauncher: ActivityResultLauncher<String>
 
     private lateinit var progressBar: LinearProgressIndicator
     private lateinit var languageSpinner: MaterialAutoCompleteTextView
@@ -118,6 +125,7 @@ class ShareReceiver : AppCompatActivity() {
             }
         }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_share_receiver)
@@ -148,6 +156,18 @@ class ShareReceiver : AppCompatActivity() {
         urlLabel = findViewById(R.id.tvUrl)
         saveFileButton = findViewById(R.id.btnSaveFile)
 
+
+        // Setup requestNotificationPermissionLauncher
+        requestNotificationPermissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { isGranted: Boolean ->
+            if (!isGranted) {
+                Toast.makeText(
+                    this, R.string.permission_notification_not_granted_message, Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
         // Set outputFile
         outputFileUri = Uri.fromFile(File(this@ShareReceiver.cacheDir, "output.wav"))
         Log.i("tts", "Output file uri: $outputFileUri")
@@ -155,9 +175,7 @@ class ShareReceiver : AppCompatActivity() {
         // Setup spinners
         languageSpinner.setAdapter(
             ArrayAdapter(
-                this,
-                android.R.layout.simple_list_item_1,
-                supportedLanguages
+                this, android.R.layout.simple_list_item_1, supportedLanguages
             )
         )
         ttsSpinner.setAdapter(
@@ -179,11 +197,17 @@ class ShareReceiver : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        val filter = IntentFilter("com.example.websitereader.AUDIO_GENERATION_COMPLETE")
-        LocalBroadcastManager.getInstance(this)
-            .registerReceiver(audioGenerationCompleteReceiver, filter)
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+                audioGenerationCompleteReceiver,
+                IntentFilter("com.example.websitereader.AUDIO_GENERATION_COMPLETE")
+            )
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+                audioGenerationFailedReceiver,
+                IntentFilter("com.example.websitereader.AUDIO_GENERATION_FAILED")
+            )
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun handleIncomingIntent() {
         if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
             intent.getStringExtra(Intent.EXTRA_TEXT)?.let { url ->
@@ -194,6 +218,16 @@ class ShareReceiver : AppCompatActivity() {
         }
     }
 
+    fun checkNotificationPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return true
+        }
+        return ContextCompat.checkSelfPermission(
+            this, Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private suspend fun validateAndProcessSharedUrl(sharedText: String) {
         if (Patterns.WEB_URL.matcher(sharedText).matches()) {
             try {
@@ -256,7 +290,21 @@ class ShareReceiver : AppCompatActivity() {
         }
     }
 
+    private val audioGenerationFailedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            progressBar.visibility = LinearProgressIndicator.GONE
+            generateAudioButton.isEnabled = true
+            saveFileButton.visibility = MaterialButton.VISIBLE
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun generateAudio(article: Article) {
+        if (!checkNotificationPermission()) {
+            requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+
         progressBar.visibility = LinearProgressIndicator.VISIBLE
         generateAudioButton.isEnabled = false // Disable the button
         saveFileButton.visibility = MaterialButton.GONE
@@ -273,6 +321,7 @@ class ShareReceiver : AppCompatActivity() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private suspend fun processSharedUrl(sharedUrl: String) {
         // Set the url in the ui label
         urlLabel.text = getString(R.string.share_receiver_url_label, sharedUrl)
@@ -343,6 +392,7 @@ class ShareReceiver : AppCompatActivity() {
             bound = false
         }
         LocalBroadcastManager.getInstance(this).unregisterReceiver(audioGenerationCompleteReceiver)
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(audioGenerationFailedReceiver)
         super.onStop()
     }
 

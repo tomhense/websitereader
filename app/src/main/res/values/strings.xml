@@ -9,6 +9,8 @@
     <string name="share_receiver_generate_audio_button">Generate Audio</string>
     <string name="share_receiver_save_file_button">Save file</string>
     <string name="language">Language</string>
+    <string name="stop">Stop</string>
     <string name="tts_generation_notification_title">TTS Generation</string>
     <string name="tts_generation_notification_progress">Progress: %1$d%%</string>
+    <string name="permission_notification_not_granted_message">Please grant the notification permission, it is required for the app to work</string>
 </resources>
