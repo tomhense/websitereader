@@ -32,6 +32,21 @@
             android:inputType="textUri" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <!-- API key -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:hint="API Key"
+        app:endIconMode="password_toggle">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editApiKey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textPassword" />
+    </com.google.android.material.textfield.TextInputLayout>
+
     <!-- Voice Name -->
     <com.google.android.material.textfield.TextInputLayout
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"

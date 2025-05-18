@@ -11,6 +11,7 @@ import kotlinx.serialization.json.Json
 data class TTSProviderEntry(
     var name: String,
     var apiBaseUrl: String,
+    var apiKey: String,
     var voiceName: String,
     var pricePer1MCharacters: Double, // 0.6 / 4
     var maxChunkLength: Int, // 4096

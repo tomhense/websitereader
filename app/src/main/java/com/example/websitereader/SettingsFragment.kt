@@ -59,6 +59,7 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.editVoiceName)
         val editPricePer1M = dialogView.findViewById<TextInputEditText>(R.id.editPricePer1M)
         val editMaxChunkLength = dialogView.findViewById<TextInputEditText>(R.id.editMaxChunkLength)
+        val editApiKey = dialogView.findViewById<TextInputEditText>(R.id.editApiKey)
 
         // Set autocomplete adapter for voice names on the dialog view's TextInputEditText
         editVoiceName.setAdapter(
@@ -83,6 +84,7 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             editVoiceName.setText(entry.voiceName)
             editPricePer1M.setText(entry.pricePer1MCharacters.toString())
             editMaxChunkLength.setText(entry.maxChunkLength.toString())
+            editApiKey.setText(entry.apiKey)
         } else {
             // Adding new: prefill with defaults
             editName.setText(defaultName)
@@ -99,6 +101,7 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                 val voiceName = editVoiceName.text?.toString()?.trim().orEmpty()
                 val priceStr = editPricePer1M.text?.toString()?.trim().orEmpty()
                 val maxChunkStr = editMaxChunkLength.text?.toString()?.trim().orEmpty()
+                val apiKey = editApiKey.text?.toString()?.trim().orEmpty()
 
                 val price = priceStr.toDoubleOrNull()
                 val maxChunk = maxChunkStr.toIntOrNull()
@@ -120,7 +123,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                     apiBaseUrl = apiBaseUrl,
                     voiceName = voiceName,
                     pricePer1MCharacters = price,
-                    maxChunkLength = maxChunk
+                    maxChunkLength = maxChunk,
+                    apiKey = apiKey
                 )
 
                 if (editIndex != null) {
