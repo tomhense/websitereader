@@ -1,15 +1,2 @@
 <?xml version="1.0" encoding="utf-8"?>
-<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <EditTextPreference
-        android:key="username"
-        android:summary="Set your username"
-        android:title="Username" />
-
-    <SwitchPreferenceCompat
-        android:defaultValue="true"
-        android:key="notifications"
-        android:summary="Turn notifications on or off"
-        android:title="Enable Notifications" />
-
-</PreferenceScreen>
+<PreferenceScreen />
