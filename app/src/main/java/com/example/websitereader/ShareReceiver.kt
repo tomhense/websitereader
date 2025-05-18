@@ -4,11 +4,13 @@ import android.Manifest
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.util.Patterns
+import android.view.WindowInsetsController
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,6 +62,22 @@ class ShareReceiver : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityShareReceiverBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+
+        // Handle status bar color
+        val isDarkTheme =
+            (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        if (isDarkTheme) {
+            window.insetsController?.setSystemBarsAppearance(
+                0,
+                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+            )
+        } else {
+            window.insetsController?.setSystemBarsAppearance(
+                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+            )
+        }
 
         // Handle insets
         WindowCompat.setDecorFitsSystemWindows(window, false)

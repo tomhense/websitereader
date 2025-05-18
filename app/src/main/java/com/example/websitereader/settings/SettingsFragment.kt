@@ -1,10 +1,13 @@
 package com.example.websitereader.settings
 
+import android.os.Build
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.view.WindowInsetsController
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.websitereader.R
@@ -30,8 +33,15 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
     private var _binding: FragmentSettingsBinding? = null
     private val binding get() = _binding!!
 
+    @RequiresApi(Build.VERSION_CODES.R)
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         _binding = FragmentSettingsBinding.bind(view)
+
+        val window = requireActivity().window
+        window.insetsController?.setSystemBarsAppearance(
+            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+        )
 
         entries = TTSProviderEntryStorage.load(requireContext()).toMutableList()
 
@@ -65,9 +75,7 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         // Set autocomplete adapter for voice names on the dialog view's TextInputEditText
         editVoiceName.setAdapter(
             ArrayAdapter(
-                requireContext(),
-                android.R.layout.simple_list_item_1,
-                defaultVoices
+                requireContext(), android.R.layout.simple_list_item_1, defaultVoices
             )
         )
 
