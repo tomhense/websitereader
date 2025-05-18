@@ -12,10 +12,4 @@
         android:summary="Turn notifications on or off"
         android:title="Enable Notifications" />
 
-    <ListPreference
-        android:defaultValue="light"
-        android:entries="@array/theme_names"
-        android:entryValues="@array/theme_values"
-        android:key="theme"
-        android:title="Theme" />
 </PreferenceScreen>

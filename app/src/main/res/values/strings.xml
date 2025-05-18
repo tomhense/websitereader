@@ -13,4 +13,5 @@
     <string name="tts_generation_notification_title">TTS Generation</string>
     <string name="tts_generation_notification_progress">Progress: %1$d%%</string>
     <string name="permission_notification_not_granted_message">Please grant the notification permission, it is required for the app to work</string>
+    <string name="settings">Settings</string>
 </resources>
