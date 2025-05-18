@@ -7,7 +7,7 @@ import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.widget.Toast
 import com.example.websitereader.tts.Utils.concatWaveFiles
-import com.example.websitereader.tts.Utils.splitTextIntoChunks
+import com.example.websitereader.tts.Utils.splitTextIntoShortChunks
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -17,9 +17,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.random.Random
 
-class Android(private val context: Context) :
-    TextToSpeech.OnInitListener,
-    Provider {
+class Android(private val context: Context) : TextToSpeech.OnInitListener, Provider {
     override val isReady = CompletableDeferred<Unit>()
 
     private val textToSpeech = TextToSpeech(context, this)
@@ -28,9 +26,7 @@ class Android(private val context: Context) :
         if (status != TextToSpeech.SUCCESS) {
             Log.e("tts", "TTS engine initialization failed with status $status")
             Toast.makeText(
-                context,
-                "TTS engine initialization failed with status $status",
-                Toast.LENGTH_SHORT
+                context, "TTS engine initialization failed with status $status", Toast.LENGTH_SHORT
             ).show()
             throw IllegalStateException("ERROR INITIALIZING TTS")
         }
@@ -51,7 +47,7 @@ class Android(private val context: Context) :
 
         // Create chunks from the long given text which the TTS can ingest
         Log.i("tts", "Max tts chunk length: ${TextToSpeech.getMaxSpeechInputLength()}")
-        val chunks = splitTextIntoChunks(text, TextToSpeech.getMaxSpeechInputLength())
+        val chunks = splitTextIntoShortChunks(text, TextToSpeech.getMaxSpeechInputLength())
         for (i in chunks.indices) {
             Log.i("tts", "Chunk ${i + 1} length: ${chunks[i].length}")
         }
@@ -63,9 +59,7 @@ class Android(private val context: Context) :
             val tempFile = File(context.cacheDir, "$i.wav")
             tempAudioFiles.add(tempFile)
             synthesizeTextChunkToFile(
-                chunks[i],
-                langCode,
-                tempFile
+                chunks[i], langCode, tempFile
             )
         }
 
@@ -118,13 +112,12 @@ class Android(private val context: Context) :
         textToSpeech.setOnUtteranceProgressListener(utteranceProgressListener)
         textToSpeech.language = Locale(langCode)
 
-        textToSpeech.synthesizeToFile(text, params, file, utteranceId)
-            .also { result ->
-                if (result != TextToSpeech.SUCCESS) {
-                    continuation.resumeWithException(Exception("Error starting synthesis"))
-                    return@suspendCancellableCoroutine
-                }
+        textToSpeech.synthesizeToFile(text, params, file, utteranceId).also { result ->
+            if (result != TextToSpeech.SUCCESS) {
+                continuation.resumeWithException(Exception("Error starting synthesis"))
+                return@suspendCancellableCoroutine
             }
+        }
     }
 
     fun onDestroy() {

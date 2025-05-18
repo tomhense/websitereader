@@ -13,7 +13,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 object Utils {
-    fun splitTextIntoChunks(text: String, maxChunkLength: Int): List<String> {
+    fun splitTextIntoShortChunks(text: String, maxChunkLength: Int): List<String> {
         val result = mutableListOf<String>()
         // Simple regex for splitting into sentences
         val sentenceRegex = Regex("(?<=[.!?])\\s+")
@@ -61,6 +61,21 @@ object Utils {
             }
         }
         return result
+    }
+
+    fun splitTextIntoLongChunks(text: String, maxChunkLength: Int): List<String> {
+        val list = mutableListOf<String>()
+        val words = text.split(" ")
+        var chunk = ""
+        for (word in words) {
+            if ((chunk + word).length >= maxChunkLength) {
+                list.add(chunk)
+                chunk = ""
+            }
+            chunk += "$word "
+        }
+        list.add(chunk)
+        return list
     }
 
     // Concatenate audio files using remuxing, this works all major audio encodings except wave and pcm

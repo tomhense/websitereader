@@ -3,7 +3,7 @@ package com.example.websitereader.tts
 import android.content.Context
 import com.example.websitereader.tts.Utils.concatAudioFilesByRemuxing
 import com.example.websitereader.tts.Utils.concatWaveFiles
-import com.example.websitereader.tts.Utils.splitTextIntoChunks
+import com.example.websitereader.tts.Utils.splitTextIntoLongChunks
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -43,7 +43,7 @@ class OpenAI(private val context: Context, private val apiKey: String) : Provide
         outputFile: File,
         progressCallback: (Double, ProgressState) -> Unit
     ): Unit = coroutineScope {
-        val chunks = splitTextIntoChunks(text, maxChunkLength)
+        val chunks = splitTextIntoLongChunks(text, maxChunkLength)
         val tempAudioFiles = List(chunks.size) { i ->
             File(context.cacheDir, "openai-tts-chunk-${System.currentTimeMillis()}-$i.wav")
         }
