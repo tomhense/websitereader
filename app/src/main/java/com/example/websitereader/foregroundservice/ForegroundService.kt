@@ -1,4 +1,4 @@
-package com.example.websitereader
+package com.example.websitereader.foregroundservice
 
 import android.app.PendingIntent
 import android.app.Service
@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
+import com.example.websitereader.R
 import com.example.websitereader.tts.ProgressState
 import com.example.websitereader.tts.TTSProviderFactory
 import kotlinx.coroutines.CoroutineScope

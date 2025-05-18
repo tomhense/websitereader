@@ -1,10 +1,11 @@
-package com.example.websitereader
+package com.example.websitereader.settings
 
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import com.example.websitereader.R
 
 class TTSProviderEntryAdapter(
     private val entries: MutableList<TTSProviderEntry>,

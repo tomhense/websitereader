@@ -1,10 +1,11 @@
-package com.example.websitereader
+package com.example.websitereader.foregroundservice
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import androidx.core.app.NotificationCompat
+import com.example.websitereader.R
 
 class ForegroundNotificationHelper(
     private val context: Context, private val channelId: String, private val channelName: String

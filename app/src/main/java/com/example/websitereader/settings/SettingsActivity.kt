@@ -1,4 +1,4 @@
-package com.example.websitereader
+package com.example.websitereader.settings
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity

@@ -21,6 +21,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.example.websitereader.databinding.ActivityShareReceiverBinding
+import com.example.websitereader.foregroundservice.AudioGenerationBroadcastReceiver
+import com.example.websitereader.foregroundservice.AudioGenerationServiceConnector
+import com.example.websitereader.foregroundservice.ForegroundService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

@@ -1,4 +1,4 @@
-package com.example.websitereader
+package com.example.websitereader.foregroundservice
 
 import android.content.ComponentName
 import android.content.ServiceConnection

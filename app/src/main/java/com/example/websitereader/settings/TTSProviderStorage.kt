@@ -1,4 +1,4 @@
-package com.example.websitereader
+package com.example.websitereader.settings
 
 import android.content.Context
 import androidx.core.content.edit

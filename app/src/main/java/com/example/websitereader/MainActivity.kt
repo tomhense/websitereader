@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import com.example.websitereader.databinding.ActivityMainBinding
+import com.example.websitereader.settings.SettingsActivity
 
 class MainActivity : ComponentActivity() {
     private lateinit var binding: ActivityMainBinding
