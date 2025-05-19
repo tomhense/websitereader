@@ -26,6 +26,9 @@ import com.example.websitereader.databinding.ActivityShareReceiverBinding
 import com.example.websitereader.foregroundservice.AudioGenerationBroadcastReceiver
 import com.example.websitereader.foregroundservice.AudioGenerationServiceConnector
 import com.example.websitereader.foregroundservice.ForegroundService
+import com.example.websitereader.settings.TTSProviderEntry
+import com.example.websitereader.settings.TTSProviderEntryStorage
+import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -40,21 +43,15 @@ class ShareReceiver : AppCompatActivity() {
     private lateinit var audioPlayer: AudioPlayer
     private lateinit var serviceConnector: AudioGenerationServiceConnector
     private lateinit var requestNotificationPermissionLauncher: ActivityResultLauncher<String>
+    private lateinit var ttsProviders: List<TTSProviderEntry>
+    private lateinit var ttsProviderNames: ImmutableList<String>
+    private var selectedTtsProvider: TTSProviderEntry? = null
+    private lateinit var createFileLauncher: ActivityResultLauncher<String>
+
     private val broadcastReceiver by lazy {
         AudioGenerationBroadcastReceiver(
             onComplete = ::onAudioGenerationComplete, onFailure = ::onAudioGenerationFailed
         )
-    }
-    private val createFileLauncher by lazy {
-        registerForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { destUri: Uri? ->
-            if (destUri != null) {
-                copyFile(outputFileUri, destUri)
-            } else {
-                Toast.makeText(
-                    this, "File not saved (no destination selected).", Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
@@ -69,8 +66,7 @@ class ShareReceiver : AppCompatActivity() {
             (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         if (isDarkTheme) {
             window.insetsController?.setSystemBarsAppearance(
-                0,
-                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
             )
         } else {
             window.insetsController?.setSystemBarsAppearance(
@@ -96,15 +92,22 @@ class ShareReceiver : AppCompatActivity() {
         outputFileUri = Uri.fromFile(File(this@ShareReceiver.cacheDir, "output.wav"))
         audioPlayer = AudioPlayer(this)
 
+        // Get tts providers
+        ttsProviders = TTSProviderEntryStorage.load(this)
+        ttsProviderNames =
+            ImmutableList.Builder<String>().add("Android").addAll(ttsProviders.map { it.name })
+                .build()
+
         // Setup spinners
         binding.spinnerLanguage.setAdapter(
             android.widget.ArrayAdapter(
                 this, android.R.layout.simple_list_item_1, supportedLanguages
             )
         )
+
         binding.spinnerTts.setAdapter(
             android.widget.ArrayAdapter(
-                this, android.R.layout.simple_list_item_1, arrayOf("Android", "OpenAI")
+                this, android.R.layout.simple_list_item_1, ttsProviderNames
             )
         )
 
@@ -126,6 +129,18 @@ class ShareReceiver : AppCompatActivity() {
                     binding.generationProgressBar.progress = (progress * 100).toInt()
                 }
             })
+
+        // Create file launcher
+        createFileLauncher =
+            registerForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { destUri: Uri? ->
+                if (destUri != null) {
+                    copyFile(outputFileUri, destUri)
+                } else {
+                    Toast.makeText(
+                        this, "File not saved (no destination selected).", Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
 
         // Handle Intent
         handleIncomingIntent()
@@ -206,6 +221,26 @@ class ShareReceiver : AppCompatActivity() {
             article!!.text.length,
             article!!.lang ?: "Unknown"
         )
+
+        // Set TTS provider
+        binding.spinnerTts.setText(ttsProviderNames[0], false)
+        binding.spinnerTts.setOnItemClickListener { parent, view, position, id ->
+            Log.i("tts", "Set TTS provider to ${ttsProviderNames[position]}")
+            if (position == 0) {
+                selectedTtsProvider = null
+                binding.tvEstimatedCost.visibility = android.view.View.GONE
+
+            } else {
+                selectedTtsProvider = ttsProviders[position - 1]
+                val cost =
+                    ttsProviders[position - 1].pricePer1MCharacters * article!!.text.length / 1000000
+                binding.tvEstimatedCost.visibility = android.view.View.VISIBLE
+                binding.tvEstimatedCost.text =
+                    getString(R.string.share_receiver_estimated_cost_label, cost)
+
+            }
+        }
+
         // Hide estimated cost
         binding.tvEstimatedCost.visibility = android.view.View.GONE
 
@@ -284,13 +319,17 @@ class ShareReceiver : AppCompatActivity() {
         binding.btnSaveFile.visibility = android.view.View.GONE
 
         val intent = Intent(this, ForegroundService::class.java)
-        // Always use actual spinner selection (add this logic if OpenAI is supported etc)
-        intent.putExtra(
-            ForegroundService.EXTRA_PROVIDER_CLASS_NAME, "com.example.websitereader.tts.Android"
-        )
         intent.putExtra(ForegroundService.EXTRA_TEXT, article.text)
         intent.putExtra(ForegroundService.EXTRA_LANG, article.lang)
         intent.putExtra(ForegroundService.EXTRA_FILE_URI, outputFileUri.toString())
+        if (selectedTtsProvider != null) {
+            intent.putExtra(
+                ForegroundService.EXTRA_PROVIDER_ENTRY,
+                TTSProviderEntryStorage.toJson(selectedTtsProvider!!)
+            )
+        }
+
+
         startService(intent)
         bindService(intent, serviceConnector, BIND_AUTO_CREATE)
     }

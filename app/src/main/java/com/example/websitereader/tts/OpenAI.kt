@@ -1,6 +1,10 @@
 package com.example.websitereader.tts
 
 import android.content.Context
+import android.os.Build
+import android.util.Log
+import androidx.annotation.RequiresApi
+import com.example.websitereader.settings.TTSProviderEntry
 import com.example.websitereader.tts.Utils.concatAudioFilesByRemuxing
 import com.example.websitereader.tts.Utils.concatWaveFiles
 import com.example.websitereader.tts.Utils.splitTextIntoLongChunks
@@ -20,23 +24,25 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 
-class OpenAI(private val context: Context, private val apiKey: String) : Provider {
+class OpenAI(
+    private val context: Context,
+    ttsProviderEntry: TTSProviderEntry
+) : Provider {
     override val isReady = CompletableDeferred<Unit>()
+    private val baseUrl = ttsProviderEntry.apiBaseUrl
+    private val apiKey = ttsProviderEntry.apiKey
+    private val maxChunkLength = ttsProviderEntry.maxChunkLength
+    private val voiceName = ttsProviderEntry.voiceName
+    private val audioFormat = "wav" // TODO: Make this configurable
+    private val modelName = ttsProviderEntry.modelName
+
     private val client = OkHttpClient()
-    private val maxChunkLength = 4096 // OpenAI TTS API limit
-    private val openAIApiBaseUrl = "https://api.openai.com"
-    private val audioFormat = "opus"
-
-    // The price in dollar for one million tokens of input
-    // For gpt-4o-mini-tts currently 0.6$ per 1M tokens.
-    // Characters are converted to tokens with the thumb rule 4 chars per token
-    private val pricePer1MCharacters = 0.6 / 4
-
 
     init {
         isReady.complete(Unit)
     }
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     override suspend fun synthesizeTextToFile(
         text: String,
         langCode: String,
@@ -45,7 +51,10 @@ class OpenAI(private val context: Context, private val apiKey: String) : Provide
     ): Unit = coroutineScope {
         val chunks = splitTextIntoLongChunks(text, maxChunkLength)
         val tempAudioFiles = List(chunks.size) { i ->
-            File(context.cacheDir, "openai-tts-chunk-${System.currentTimeMillis()}-$i.wav")
+            File(
+                context.cacheDir,
+                "openai-tts-chunk-${System.currentTimeMillis()}-$i.${audioFormat}"
+            )
         }
 
         // Launch all requests in parallel (async)
@@ -67,14 +76,15 @@ class OpenAI(private val context: Context, private val apiKey: String) : Provide
 
         // Concatenate
         progressCallback(1.0, ProgressState.CONCATENATION)
+        Log.i("OpenAI", "Concatenating audio files")
         if (audioFormat == "wav") {
             concatWaveFiles(tempAudioFiles, outputFile)
         } else {
-            concatAudioFilesByRemuxing(tempAudioFiles, outputFile)
+            concatAudioFilesByRemuxing(tempAudioFiles, outputFile, audioFormat)
         }
 
         // Clean temp
-        tempAudioFiles.forEach { it.delete() }
+        //tempAudioFiles.forEach { it.delete() }
     }
 
     // Calls OpenAI's TTS endpoint, saves as .wav
@@ -84,16 +94,16 @@ class OpenAI(private val context: Context, private val apiKey: String) : Provide
         langCode: String,
         file: File,
     ): Boolean = suspendCancellableCoroutine { continuation ->
-        val ttsUrl = "$openAIApiBaseUrl/v1/audio/speech"
-        val model = "tts-1"
-        val voice = mapLangCodeToVoice(langCode)
+        val ttsUrl = "$baseUrl/v1/audio/speech"
 
         // Use org.json to build request body
         val payload = JSONObject().apply {
-            put("model", model)
+            put("model", modelName)
             put("input", text)
-            put("voice", voice)
+            put("voice", voiceName)
+            put("instructions", "Speak in a cheerful and positive tone.")
             put("response_format", audioFormat)
+            put("lang_code", langCode)
         }
 
         val mediaType = "application/json".toMediaType()
@@ -103,6 +113,7 @@ class OpenAI(private val context: Context, private val apiKey: String) : Provide
 
         client.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: IOException) {
+                Log.e("OpenAI", "TTS request failed", e)
                 if (continuation.isActive) continuation.resume(false, null)
             }
 
@@ -118,24 +129,11 @@ class OpenAI(private val context: Context, private val apiKey: String) : Provide
                         if (continuation.isActive) continuation.resume(false, null)
                     }
                 } else {
+                    Log.e("OpenAI", "TTS request failed : ${response.code} ${response.message}")
                     if (continuation.isActive) continuation.resume(false, null)
                 }
                 response.close()
             }
         })
-    }
-
-    // Example: map language to OpenAI voice (You should improve this mapping as appropriate)
-    private fun mapLangCodeToVoice(langCode: String): String {
-        return when (langCode) {
-            "en", "en-US" -> "alloy"
-            // Others: "echo", "fable", "onyx", "nova", "shimmer"
-            // Add more as needed per OpenAI docs/users
-            else -> "alloy"
-        }
-    }
-
-    fun onDestroy() {
-        // You can shutdown OkHttp dispatcher etc if you want
     }
 }

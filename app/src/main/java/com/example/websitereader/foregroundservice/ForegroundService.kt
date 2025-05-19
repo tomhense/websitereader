@@ -11,8 +11,11 @@ import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import com.example.websitereader.R
+import com.example.websitereader.settings.TTSProviderEntryStorage
+import com.example.websitereader.tts.Android
+import com.example.websitereader.tts.OpenAI
 import com.example.websitereader.tts.ProgressState
-import com.example.websitereader.tts.TTSProviderFactory
+import com.example.websitereader.tts.Provider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,7 +43,7 @@ class ForegroundService : Service() {
     companion object {
         const val CHANNEL_ID = "my_channel_01"
         const val NOTIFICATION_ID = 1
-        const val EXTRA_PROVIDER_CLASS_NAME = "PROVIDER_CLASS_NAME"
+        const val EXTRA_PROVIDER_ENTRY = "PROVIDER_ENTRY"
         const val EXTRA_TEXT = "TEXT"
         const val EXTRA_LANG = "LANG"
         const val EXTRA_FILE_URI = "FILE_URI"
@@ -67,12 +70,14 @@ class ForegroundService : Service() {
         }
 
         // 2. Parameters
-        val providerClassName = intent?.getStringExtra(EXTRA_PROVIDER_CLASS_NAME)
+        val providerEntry = intent?.getStringExtra(
+            EXTRA_PROVIDER_ENTRY
+        )
         val text = intent?.getStringExtra(EXTRA_TEXT)
         val lang = intent?.getStringExtra(EXTRA_LANG)
         val fileUriString = intent?.getStringExtra(EXTRA_FILE_URI)
 
-        if (providerClassName == null || text == null || lang == null || fileUriString == null) {
+        if (text == null || lang == null || fileUriString == null) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -100,11 +105,14 @@ class ForegroundService : Service() {
         val notificationManager = NotificationManagerCompat.from(this)
 
         // 6. TTS Provider
-        val providerInstance = TTSProviderFactory.createProvider(providerClassName, this)
-        if (providerInstance == null) {
-            stopSelf()
-            return START_NOT_STICKY
+        val providerInstance: Provider
+        if (providerEntry != null) {
+            val ttsProviderEntry = TTSProviderEntryStorage.fromJson(providerEntry)
+            providerInstance = OpenAI(this, ttsProviderEntry)
+        } else {
+            providerInstance = Android(this)
         }
+
         val outputFile = File(fileUriString.toUri().path!!)
 
         // 7. Coroutine

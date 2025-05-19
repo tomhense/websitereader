@@ -13,8 +13,9 @@ data class TTSProviderEntry(
     var apiBaseUrl: String,
     var apiKey: String,
     var voiceName: String,
-    var pricePer1MCharacters: Double, // 0.6 / 4
-    var maxChunkLength: Int, // 4096
+    var pricePer1MCharacters: Double,
+    var maxChunkLength: Int,
+    var modelName: String
 )
 
 object TTSProviderEntryStorage {
@@ -28,6 +29,22 @@ object TTSProviderEntryStorage {
         )
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
         prefs.edit { putString(PREFS_KEY, serialized) }
+    }
+
+    fun toJson(entry: TTSProviderEntry): String {
+        val serialized = json.encodeToString(
+            TTSProviderEntry.serializer(),
+            entry
+        )
+        return serialized
+    }
+
+    fun fromJson(src: String): TTSProviderEntry {
+        val entry = json.decodeFromString(
+            TTSProviderEntry.serializer(),
+            src
+        )
+        return entry
     }
 
     fun load(context: Context): List<TTSProviderEntry> {

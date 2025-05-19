@@ -4,6 +4,8 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.os.Build
+import androidx.annotation.RequiresApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import java.io.FileInputStream
@@ -79,12 +81,21 @@ object Utils {
     }
 
     // Concatenate audio files using remuxing, this works all major audio encodings except wave and pcm
+    @RequiresApi(Build.VERSION_CODES.Q)
     suspend fun concatAudioFilesByRemuxing(
-        audioFiles: List<File>, output: File
+        audioFiles: List<File>, output: File, audioFormat: String
     ): Boolean = suspendCancellableCoroutine { continuation ->
         try {
             // Create a MediaMuxer to write the output file
-            val muxer = MediaMuxer(output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val muxer: MediaMuxer = when (audioFormat) {
+                "opus" -> MediaMuxer(output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_OGG)
+                "mp3" -> MediaMuxer(
+                    output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
+                )
+
+                else -> throw IllegalArgumentException("Unsupported audio format: $audioFormat")
+            }
+
             // Keep track of track index
             var audioTrackIndex = -1
             var isMuxerStarted = false
@@ -165,9 +176,19 @@ object Utils {
         require(bytes.copyOfRange(0, 4).decodeToString() == "RIFF")
         val dataIdx = bytes.indexOfSlice("data".toByteArray())
         require(dataIdx >= 0)
-        val dataLen = ByteBuffer.wrap(bytes, dataIdx + 4, 4)
+        val reportedDataLen = ByteBuffer.wrap(bytes, dataIdx + 4, 4)
             .order(java.nio.ByteOrder.LITTLE_ENDIAN).int
-        return WavInfo(bytes.copyOfRange(0, dataIdx + 8), dataIdx + 8, dataLen)
+        val dataStart = dataIdx + 8
+
+        // If dataLen is 0xFFFFFFFF or exceeds file size, fallback
+        val maxPossibleDataLen = bytes.size - dataStart
+        val dataLen =
+            if (reportedDataLen == -1 || reportedDataLen > maxPossibleDataLen)
+                maxPossibleDataLen
+            else
+                reportedDataLen
+        // Make header up to and including the dataLen field (since we want to replace it)
+        return WavInfo(bytes.copyOfRange(0, dataStart), dataStart, dataLen)
     }
 
     // Writes a standard PCM WAV header
@@ -175,11 +196,10 @@ object Utils {
         val newHeader = templateHeader.copyOf()
         // Chunk size at offset 4 (4 bytes, little-endian)
         val chunkSize = totalDataLen + newHeader.size - 8
-        ByteBuffer.wrap(newHeader, 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-            .putInt(chunkSize)
+        ByteBuffer.wrap(newHeader, 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(chunkSize)
         // Subchunk2 size (data len) at offset newHeader.size-4 (typically)
-        ByteBuffer.wrap(newHeader, newHeader.size - 4, 4)
-            .order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(totalDataLen)
+        ByteBuffer.wrap(newHeader, newHeader.size - 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            .putInt(totalDataLen)
         return newHeader
     }
 

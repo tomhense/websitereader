@@ -19,11 +19,12 @@ import com.google.android.material.textfield.TextInputEditText
 class SettingsFragment : Fragment(R.layout.fragment_settings) {
     private val defaultName = "OpenAI"
     private val defaultApiBaseUrl = "https://api.openai.com"
-    private val defaultPricePer1M = 0.6 / 4
+    private val defaultPricePer1M = 12 / 4
     private val defaultMaxChunk = 4096
     private val defaultVoices = listOf(
         "alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"
     )
+    private val defaultModelName = "gpt-4o-mini-tts"
 
     // Added a default voice name; assuming "alloy" as default
     private val defaultVoiceName = "alloy"
@@ -71,6 +72,7 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         val editPricePer1M = dialogView.findViewById<TextInputEditText>(R.id.editPricePer1M)
         val editMaxChunkLength = dialogView.findViewById<TextInputEditText>(R.id.editMaxChunkLength)
         val editApiKey = dialogView.findViewById<TextInputEditText>(R.id.editApiKey)
+        val editModelName = dialogView.findViewById<TextInputEditText>(R.id.editModelName)
 
         // Set autocomplete adapter for voice names on the dialog view's TextInputEditText
         editVoiceName.setAdapter(
@@ -94,6 +96,7 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             editPricePer1M.setText(entry.pricePer1MCharacters.toString())
             editMaxChunkLength.setText(entry.maxChunkLength.toString())
             editApiKey.setText(entry.apiKey)
+            editModelName.setText(entry.modelName)
         } else {
             // Adding new: prefill with defaults
             editName.setText(defaultName)
@@ -101,6 +104,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             editVoiceName.setText(defaultVoiceName)
             editPricePer1M.setText(defaultPricePer1M.toString())
             editMaxChunkLength.setText(defaultMaxChunk.toString())
+            editApiKey.setText("")
+            editModelName.setText(defaultModelName)
         }
 
         MaterialAlertDialogBuilder(requireContext()).setTitle(if (editIndex != null) "Edit Provider" else "Add Provider")
@@ -111,6 +116,7 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                 val priceStr = editPricePer1M.text?.toString()?.trim().orEmpty()
                 val maxChunkStr = editMaxChunkLength.text?.toString()?.trim().orEmpty()
                 val apiKey = editApiKey.text?.toString()?.trim().orEmpty()
+                val modelName = editModelName.text?.toString()?.trim().orEmpty()
 
                 val price = priceStr.toDoubleOrNull()
                 val maxChunk = maxChunkStr.toIntOrNull()
@@ -133,7 +139,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                     voiceName = voiceName,
                     pricePer1MCharacters = price,
                     maxChunkLength = maxChunk,
-                    apiKey = apiKey
+                    apiKey = apiKey,
+                    modelName = modelName
                 )
 
                 if (editIndex != null) {
