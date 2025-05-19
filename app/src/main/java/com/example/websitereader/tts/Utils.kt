@@ -176,17 +176,15 @@ object Utils {
         require(bytes.copyOfRange(0, 4).decodeToString() == "RIFF")
         val dataIdx = bytes.indexOfSlice("data".toByteArray())
         require(dataIdx >= 0)
-        val reportedDataLen = ByteBuffer.wrap(bytes, dataIdx + 4, 4)
-            .order(java.nio.ByteOrder.LITTLE_ENDIAN).int
+        val reportedDataLen =
+            ByteBuffer.wrap(bytes, dataIdx + 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).int
         val dataStart = dataIdx + 8
 
         // If dataLen is 0xFFFFFFFF or exceeds file size, fallback
         val maxPossibleDataLen = bytes.size - dataStart
         val dataLen =
-            if (reportedDataLen == -1 || reportedDataLen > maxPossibleDataLen)
-                maxPossibleDataLen
-            else
-                reportedDataLen
+            if (reportedDataLen == -1 || reportedDataLen > maxPossibleDataLen) maxPossibleDataLen
+            else reportedDataLen
         // Make header up to and including the dataLen field (since we want to replace it)
         return WavInfo(bytes.copyOfRange(0, dataStart), dataStart, dataLen)
     }
@@ -210,16 +208,15 @@ object Utils {
         val totalPcmLen = wavInfos.sumOf { it.dataLen }
         val templateHeader = wavInfos[0].headerBytes
         val outputHeader = makeWavHeader(totalPcmLen, templateHeader)
-
         FileOutputStream(outputFile).use { out ->
             out.write(outputHeader)
-            for (info in wavInfos) {
-                FileInputStream(wavFiles[wavInfos.indexOf(info)]).use { `in` ->
-                    `in`.skip(info.dataStart.toLong())
+            for ((file, info) in wavFiles.zip(wavInfos)) {
+                FileInputStream(file).use { input ->
+                    input.skip(info.dataStart.toLong())
                     val buf = ByteArray(4096)
                     var remaining = info.dataLen
                     while (remaining > 0) {
-                        val read = `in`.read(buf, 0, minOf(buf.size, remaining))
+                        val read = input.read(buf, 0, minOf(buf.size, remaining))
                         if (read == -1) break
                         out.write(buf, 0, read)
                         remaining -= read

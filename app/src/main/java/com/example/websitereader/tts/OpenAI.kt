@@ -53,7 +53,7 @@ class OpenAI(
         val tempAudioFiles = List(chunks.size) { i ->
             File(
                 context.cacheDir,
-                "openai-tts-chunk-${System.currentTimeMillis()}-$i.${audioFormat}"
+                "$i.${audioFormat}"
             )
         }
 
