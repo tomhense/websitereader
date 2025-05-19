@@ -10,8 +10,6 @@ import com.example.websitereader.tts.Utils.concatWaveFiles
 import com.example.websitereader.tts.Utils.splitTextIntoLongChunks
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.MediaType.Companion.toMediaType
@@ -25,8 +23,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 
 class OpenAI(
-    private val context: Context,
-    ttsProviderEntry: TTSProviderEntry
+    private val context: Context, ttsProviderEntry: TTSProviderEntry
 ) : Provider {
     override val isReady = CompletableDeferred<Unit>()
     private val baseUrl = ttsProviderEntry.apiBaseUrl
@@ -42,6 +39,7 @@ class OpenAI(
         isReady.complete(Unit)
     }
 
+
     @RequiresApi(Build.VERSION_CODES.Q)
     override suspend fun synthesizeTextToFile(
         text: String,
@@ -52,28 +50,19 @@ class OpenAI(
         val chunks = splitTextIntoLongChunks(text, maxChunkLength)
         val tempAudioFiles = List(chunks.size) { i ->
             File(
-                context.cacheDir,
-                "$i.${audioFormat}"
+                context.cacheDir, "$i.${audioFormat}"
             )
         }
-
-        // Launch all requests in parallel (async)
-        val jobs = chunks.mapIndexed { i, chunk ->
-            async {
-                progressCallback(i.toDouble() / chunks.size, ProgressState.AUDIO_GENERATION)
-                val success = synthesizeTextChunkToFile(chunk, langCode, tempAudioFiles[i])
-                if (!success) throw IOException("OpenAI TTS failed for chunk $i")
-                true
-            }
-        }
-
         try {
-            jobs.awaitAll()
+            for (i in chunks.indices) {
+                progressCallback(i.toDouble() / chunks.size, ProgressState.AUDIO_GENERATION)
+                val success = synthesizeTextChunkToFile(chunks[i], langCode, tempAudioFiles[i])
+                if (!success) throw IOException("OpenAI TTS failed for chunk $i")
+            }
         } catch (e: Exception) {
             tempAudioFiles.forEach { it.delete() }
             throw e
         }
-
         // Concatenate
         progressCallback(1.0, ProgressState.CONCATENATION)
         Log.i("OpenAI", "Concatenating audio files")
@@ -84,7 +73,7 @@ class OpenAI(
         }
 
         // Clean temp
-        //tempAudioFiles.forEach { it.delete() }
+        tempAudioFiles.forEach { it.delete() }
     }
 
     // Calls OpenAI's TTS endpoint, saves as .wav
