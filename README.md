@@ -38,3 +38,18 @@ when adding a external TTS provider in the settings.
 Many TTS providers however charge you based on the number of tokens to synthesize.
 You can use a rough thumb-rule to convert characters to tokens: One token corresponds roughly to 4
 characters. ([Source](https://platform.openai.com/tokenizer))
+
+### ToDo
+
+- Make audioFormat used configurable per tts provider
+- Add a setting per tts provider for weather to use async api calls
+- Make supported languages configurable
+- Add disclaimer about api costs that shows when the generate button is clicked the first time
+- Better checks for adding tts provider
+    - Don't add if a provider with name already exist (also disallow the android name for the system
+      one)
+    - Make certain fields required
+    - Add helpful information about the fields
+- Have a history of last articles read to list on the main activity of the app
+    - Maybe also make the output audio files persistent and be playable from the history list
+- Add media controls to the share receiver activity (not just the notification)
