@@ -17,13 +17,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.content.ContextCompat
-import androidx.core.content.edit
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -103,8 +97,8 @@ class ShareReceiver : AppCompatActivity() {
         // Get tts providers
         ttsProviders = TTSProviderEntryStorage.load(this)
         ttsProviderNames =
-            ImmutableList.Builder<String>().add("Android").addAll(ttsProviders.map { it.name })
-                .build()
+            ImmutableList.Builder<String>().add(getString(R.string.system_tts_provider_name))
+                .addAll(ttsProviders.map { it.name }).build()
 
         // Setup spinners
         binding.spinnerLanguage.setAdapter(
@@ -316,46 +310,8 @@ class ShareReceiver : AppCompatActivity() {
         binding.btnSaveFile.visibility = android.view.View.VISIBLE
     }
 
-    @Composable
-    fun ConfirmOnceDialog(
-        context: Context,
-        onConfirmed: () -> Unit = {}
-    ) {
-        val message =
-            "I am not responsible for any costs that might occur by using external TTS providers you have configured such as OpenAI."
-        val prefsName = "disclaimer_api_costs_confirmed"
-
-        // Combined: check and set SharedPreferences in one place
-        val prefs = remember { context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE) }
-        val alreadyConfirmed = remember { prefs.getBoolean(prefsName, false) }
-
-        // Control composable dialog visibility (only at first launch)
-        val dialogVisible = rememberSaveable { mutableStateOf(!alreadyConfirmed) }
-
-        if (dialogVisible.value) {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { dialogVisible.value = false },
-                confirmButton = {
-                    androidx.compose.material3.TextButton(onClick = {
-                        // Mark as confirmed, hide dialog
-                        prefs.edit { putBoolean(prefsName, true) }
-                        dialogVisible.value = false
-                        onConfirmed()
-                    }) { Text("Confirm") }
-                },
-                dismissButton = {
-                    androidx.compose.material3.TextButton(
-                        onClick = { dialogVisible.value = false }
-                    ) { Text("Cancel") }
-                },
-                title = { Text("Disclaimer") },
-                text = { Text(message) }
-            )
-        }
-    }
-
     private fun showCostDisclaimerDialog(
-        onConfirmed: () -> Unit = {}
+        onConfirmed: () -> Unit = {}, onDeclined: () -> Unit = {}
     ) {
         val prefsName = "my_prefs"
         val key = "disclaimer_api_costs_confirmed"
@@ -363,45 +319,54 @@ class ShareReceiver : AppCompatActivity() {
         val alreadyConfirmed = prefs.getBoolean(key, false)
 
         if (!alreadyConfirmed) {
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Disclaimer")
+            MaterialAlertDialogBuilder(this).setTitle("Disclaimer")
                 .setMessage("I am not responsible for any costs that might occur by using external TTS providers you have configured such as OpenAI.")
-                .setCancelable(false)
-                .setPositiveButton("Confirm") { dialog, _ ->
+                .setCancelable(false).setPositiveButton("Confirm") { dialog, _ ->
                     prefs.edit().putBoolean(key, true).apply()
                     onConfirmed()
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
+                }.setNegativeButton("Cancel", { dialog, _ ->
+                    onDeclined()
+                }).show()
+        } else {
+            onConfirmed()
         }
     }
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun generateAudio(article: Article) {
         // Show disclaimer dialog about api costs
-        showCostDisclaimerDialog()
+        showCostDisclaimerDialog(
+            onConfirmed = {
+                if (!checkNotificationPermission()) {
+                    requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    return@showCostDisclaimerDialog
+                }
+                binding.generationProgressBar.visibility = android.view.View.VISIBLE
+                binding.btnGenerateAudio.isEnabled = false
+                binding.btnSaveFile.visibility = android.view.View.GONE
 
-        if (!checkNotificationPermission()) {
-            requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            return
-        }
-        binding.generationProgressBar.visibility = android.view.View.VISIBLE
-        binding.btnGenerateAudio.isEnabled = false
-        binding.btnSaveFile.visibility = android.view.View.GONE
+                val intent = Intent(this, ForegroundService::class.java)
+                intent.putExtra(ForegroundService.EXTRA_TEXT, article.text)
+                intent.putExtra(ForegroundService.EXTRA_LANG, article.lang)
+                intent.putExtra(ForegroundService.EXTRA_FILE_URI, outputFileUri.toString())
+                if (selectedTtsProvider != null) {
+                    intent.putExtra(
+                        ForegroundService.EXTRA_PROVIDER_ENTRY,
+                        TTSProviderEntryStorage.toJson(selectedTtsProvider!!)
+                    )
+                }
 
-        val intent = Intent(this, ForegroundService::class.java)
-        intent.putExtra(ForegroundService.EXTRA_TEXT, article.text)
-        intent.putExtra(ForegroundService.EXTRA_LANG, article.lang)
-        intent.putExtra(ForegroundService.EXTRA_FILE_URI, outputFileUri.toString())
-        if (selectedTtsProvider != null) {
-            intent.putExtra(
-                ForegroundService.EXTRA_PROVIDER_ENTRY,
-                TTSProviderEntryStorage.toJson(selectedTtsProvider!!)
-            )
-        }
-
-
-        startService(intent)
-        bindService(intent, serviceConnector, BIND_AUTO_CREATE)
+                startService(intent)
+                bindService(intent, serviceConnector, BIND_AUTO_CREATE)
+            },
+            onDeclined = {
+                Toast.makeText(
+                    this,
+                    "Please confirm the disclaimer to continue.",
+                    Toast.LENGTH_SHORT
+                )
+                    .show()
+                return@showCostDisclaimerDialog
+            })
     }
 }

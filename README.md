@@ -42,11 +42,6 @@ characters. ([Source](https://platform.openai.com/tokenizer))
 ### ToDo
 
 - Make supported languages configurable
-- Better checks for adding tts provider
-    - Don't add if a provider with name already exist (also disallow the android name for the system
-      one)
-    - Make certain fields required
-    - Add helpful information about the fields
 - Have a history of last articles read to list on the main activity of the app
     - Maybe also make the output audio files persistent and be playable from the history list
 - Add media controls to the share receiver activity (not just the notification)

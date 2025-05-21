@@ -16,14 +16,26 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:padding="16dp">
 
         <com.google.android.material.textview.MaterialTextView
             android:id="@+id/entryName"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:textAppearance="?attr/textAppearanceTitleMedium"
             android:textColor="?android:textColorPrimary" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnDeleteEntry"
+            style="@style/Widget.Material3.Button.Icon"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:backgroundTint="?attr/colorSecondaryContainer"
+            android:contentDescription="Delete"
+            app:icon="@drawable/baseline_delete_forever_24"
+            app:iconTint="?attr/colorOnSecondaryContainer" />
+
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

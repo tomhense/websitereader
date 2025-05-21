@@ -76,8 +76,10 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         val editMaxChunkLength = dialogView.findViewById<TextInputEditText>(R.id.editMaxChunkLength)
         val editApiKey = dialogView.findViewById<TextInputEditText>(R.id.editApiKey)
         val editModelName = dialogView.findViewById<TextInputEditText>(R.id.editModelName)
-        val audioFormat = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.selectAudioFormat)
-        val asyncSynthesization = dialogView.findViewById<MaterialCheckBox>(R.id.checkBoxAsyncSynthesization)
+        val audioFormat =
+            dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.selectAudioFormat)
+        val asyncSynthesization =
+            dialogView.findViewById<MaterialCheckBox>(R.id.checkBoxAsyncSynthesization)
 
         // Set autocomplete adapter for voice names on the dialog view's TextInputEditText
         editVoiceName.setAdapter(
@@ -117,8 +119,10 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             asyncSynthesization.isChecked = defaultAsyncSynthesization
         }
 
+
         MaterialAlertDialogBuilder(requireContext()).setTitle(if (editIndex != null) "Edit Provider" else "Add Provider")
-            .setView(dialogView).setPositiveButton("Save") { dialog, _ ->
+            .setView(dialogView)
+            .setPositiveButton("Save") { dialog, _ ->
                 val name = editName.text?.toString()?.trim().orEmpty()
                 val apiBaseUrl = editApiBaseUrl.text?.toString()?.trim().orEmpty()
                 val voiceName = editVoiceName.text?.toString()?.trim().orEmpty()
@@ -137,11 +141,28 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                         "Please fill in all fields with valid values",
                         Toast.LENGTH_SHORT
                     ).show()
-                    // Keep dialog open by overriding the button's click listener after showing
-                    // MaterialAlertDialogBuilder closes by default, so recreate dialog:
-                    // So just do nothing here; it's fine that dialog closes
                     return@setPositiveButton
                 }
+
+                // --- NEW LOGIC: Prevent duplicates when adding ---
+                if (editIndex == null) {
+                    val nameExists =
+                        entries.any {
+                            it.name.equals(
+                                name,
+                                ignoreCase = true
+                            )
+                        } || name == getString(R.string.system_tts_provider_name)
+                    if (nameExists) {
+                        Toast.makeText(
+                            requireContext(),
+                            "An entry with this name already exists.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        return@setPositiveButton
+                    }
+                }
+                // --- END NEW LOGIC ---
 
                 val newEntry = TTSProviderEntry(
                     name = name,
@@ -154,7 +175,6 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                     audioFormat = audioFormat,
                     asyncSynthesization = asyncSynthesization
                 )
-
                 if (editIndex != null) {
                     entries[editIndex] = newEntry
                     adapter.notifyItemChanged(editIndex)
@@ -162,8 +182,9 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                     entries.add(newEntry)
                     adapter.notifyItemInserted(entries.size - 1)
                 }
-
                 TTSProviderEntryStorage.save(requireContext(), entries)
-            }.setNegativeButton("Cancel", null).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 }

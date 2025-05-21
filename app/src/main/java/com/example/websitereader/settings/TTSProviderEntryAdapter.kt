@@ -31,6 +31,14 @@ class TTSProviderEntryAdapter(
                 onClick(adapterPosition, entries[adapterPosition])
             }
         }
+        holder.itemView.findViewById<View>(R.id.btnDeleteEntry).setOnClickListener {
+            val adapterPosition = holder.bindingAdapterPosition
+            if (adapterPosition != RecyclerView.NO_POSITION) {
+                entries.removeAt(adapterPosition)
+                notifyItemRemoved(adapterPosition)
+                TTSProviderEntryStorage.save(holder.itemView.context, entries)
+            }
+        }
     }
 
     override fun getItemCount() = entries.size
