@@ -42,7 +42,6 @@ characters. ([Source](https://platform.openai.com/tokenizer))
 ### ToDo
 
 - Make supported languages configurable
-- Add disclaimer about api costs that shows when the generate button is clicked the first time
 - Better checks for adding tts provider
     - Don't add if a provider with name already exist (also disallow the android name for the system
       one)

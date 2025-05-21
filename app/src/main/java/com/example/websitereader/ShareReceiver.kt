@@ -1,6 +1,7 @@
 package com.example.websitereader
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
@@ -16,7 +17,13 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -28,6 +35,7 @@ import com.example.websitereader.foregroundservice.AudioGenerationServiceConnect
 import com.example.websitereader.foregroundservice.ForegroundService
 import com.example.websitereader.settings.TTSProviderEntry
 import com.example.websitereader.settings.TTSProviderEntryStorage
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -308,8 +316,71 @@ class ShareReceiver : AppCompatActivity() {
         binding.btnSaveFile.visibility = android.view.View.VISIBLE
     }
 
+    @Composable
+    fun ConfirmOnceDialog(
+        context: Context,
+        onConfirmed: () -> Unit = {}
+    ) {
+        val message =
+            "I am not responsible for any costs that might occur by using external TTS providers you have configured such as OpenAI."
+        val prefsName = "disclaimer_api_costs_confirmed"
+
+        // Combined: check and set SharedPreferences in one place
+        val prefs = remember { context.getSharedPreferences("my_prefs", Context.MODE_PRIVATE) }
+        val alreadyConfirmed = remember { prefs.getBoolean(prefsName, false) }
+
+        // Control composable dialog visibility (only at first launch)
+        val dialogVisible = rememberSaveable { mutableStateOf(!alreadyConfirmed) }
+
+        if (dialogVisible.value) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { dialogVisible.value = false },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        // Mark as confirmed, hide dialog
+                        prefs.edit { putBoolean(prefsName, true) }
+                        dialogVisible.value = false
+                        onConfirmed()
+                    }) { Text("Confirm") }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = { dialogVisible.value = false }
+                    ) { Text("Cancel") }
+                },
+                title = { Text("Disclaimer") },
+                text = { Text(message) }
+            )
+        }
+    }
+
+    private fun showCostDisclaimerDialog(
+        onConfirmed: () -> Unit = {}
+    ) {
+        val prefsName = "my_prefs"
+        val key = "disclaimer_api_costs_confirmed"
+        val prefs = getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+        val alreadyConfirmed = prefs.getBoolean(key, false)
+
+        if (!alreadyConfirmed) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Disclaimer")
+                .setMessage("I am not responsible for any costs that might occur by using external TTS providers you have configured such as OpenAI.")
+                .setCancelable(false)
+                .setPositiveButton("Confirm") { dialog, _ ->
+                    prefs.edit().putBoolean(key, true).apply()
+                    onConfirmed()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private fun generateAudio(article: Article) {
+        // Show disclaimer dialog about api costs
+        showCostDisclaimerDialog()
+
         if (!checkNotificationPermission()) {
             requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             return
