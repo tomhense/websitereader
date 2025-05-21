@@ -76,9 +76,9 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         val editMaxChunkLength = dialogView.findViewById<TextInputEditText>(R.id.editMaxChunkLength)
         val editApiKey = dialogView.findViewById<TextInputEditText>(R.id.editApiKey)
         val editModelName = dialogView.findViewById<TextInputEditText>(R.id.editModelName)
-        val audioFormat =
+        val selectAudioFormat =
             dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.selectAudioFormat)
-        val asyncSynthesization =
+        val editAsyncSynthesization =
             dialogView.findViewById<MaterialCheckBox>(R.id.checkBoxAsyncSynthesization)
 
         // Set autocomplete adapter for voice names on the dialog view's TextInputEditText
@@ -104,8 +104,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             editMaxChunkLength.setText(entry.maxChunkLength.toString())
             editApiKey.setText(entry.apiKey)
             editModelName.setText(entry.modelName)
-            audioFormat.setText(entry.audioFormat)
-            asyncSynthesization.isChecked = entry.asyncSynthesization
+            selectAudioFormat.setText(entry.audioFormat)
+            editAsyncSynthesization.isChecked = entry.asyncSynthesization
         } else {
             // Adding new: prefill with defaults
             editName.setText(defaultName)
@@ -115,8 +115,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             editMaxChunkLength.setText(defaultMaxChunk.toString())
             editApiKey.setText("")
             editModelName.setText(defaultModelName)
-            audioFormat.setText(defaultAudioFormat)
-            asyncSynthesization.isChecked = defaultAsyncSynthesization
+            selectAudioFormat.setText(defaultAudioFormat)
+            editAsyncSynthesization.isChecked = defaultAsyncSynthesization
         }
 
 
@@ -124,7 +124,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             .setView(dialogView)
             .setPositiveButton("Save") { dialog, _ ->
                 val name = editName.text?.toString()?.trim().orEmpty()
-                val apiBaseUrl = editApiBaseUrl.text?.toString()?.trim().orEmpty()
+                val apiBaseUrl =
+                    editApiBaseUrl.text?.toString()?.trim()?.removeSuffix("/").orEmpty()
                 val voiceName = editVoiceName.text?.toString()?.trim().orEmpty()
                 val priceStr = editPricePer1M.text?.toString()?.trim().orEmpty()
                 val maxChunkStr = editMaxChunkLength.text?.toString()?.trim().orEmpty()
@@ -132,8 +133,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                 val modelName = editModelName.text?.toString()?.trim().orEmpty()
                 val price = priceStr.toDoubleOrNull()
                 val maxChunk = maxChunkStr.toIntOrNull()
-                val audioFormat = audioFormat.text?.toString()?.trim().orEmpty()
-                val asyncSynthesization = asyncSynthesization.isChecked
+                val audioFormat = selectAudioFormat.text?.toString()?.trim().orEmpty()
+                val asyncSynthesization = editAsyncSynthesization.isChecked
 
                 if (name.isEmpty() || apiBaseUrl.isEmpty() || voiceName.isEmpty() || price == null || maxChunk == null || audioFormat.isEmpty()) {
                     Toast.makeText(
