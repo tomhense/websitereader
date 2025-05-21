@@ -65,7 +65,6 @@ class Android(private val context: Context) : TextToSpeech.OnInitListener, Provi
 
         Log.i("tts", "Starting to concat segments")
         progressCallback(1.0, ProgressState.CONCATENATION)
-        //concatAudioFiles(tempAudioFiles, outputFile)
         concatWaveFiles(tempAudioFiles, outputFile)
 
         // Clean up temp files
@@ -118,11 +117,5 @@ class Android(private val context: Context) : TextToSpeech.OnInitListener, Provi
                 return@suspendCancellableCoroutine
             }
         }
-    }
-
-    fun onDestroy() {
-        // Shutdown TTS to release the resource
-        textToSpeech.stop()
-        textToSpeech.shutdown()
     }
 }

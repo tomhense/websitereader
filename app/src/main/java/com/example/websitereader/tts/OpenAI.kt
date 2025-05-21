@@ -3,9 +3,9 @@ package com.example.websitereader.tts
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import com.example.websitereader.settings.TTSProviderEntry
-import com.example.websitereader.tts.Utils.concatAudioFilesByRemuxing
 import com.example.websitereader.tts.Utils.concatWaveFiles
 import com.example.websitereader.tts.Utils.splitTextIntoLongChunks
 import kotlinx.coroutines.CompletableDeferred
@@ -80,7 +80,8 @@ class OpenAI(
             if (audioFormat == "wav") {
                 concatWaveFiles(tempAudioFiles, outputFile)
             } else {
-                concatAudioFilesByRemuxing(tempAudioFiles, outputFile, audioFormat)
+                Toast.makeText(context, "Currently only wav works", Toast.LENGTH_SHORT).show()
+                //concatAudioFilesByRemuxing(tempAudioFiles, outputFile, audioFormat)
             }
         } finally {
             tempAudioFiles.forEach { it.delete() }

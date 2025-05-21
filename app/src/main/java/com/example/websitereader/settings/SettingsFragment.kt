@@ -26,11 +26,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         "alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"
     )
     private val defaultModelName = "gpt-4o-mini-tts"
-    private val defaultAudioFormat = "mp3"
+    private val defaultAudioFormats = listOf("mp3", "opus", "wav")
     private val defaultAsyncSynthesization = false
-
-    // Added a default voice name; assuming "alloy" as default
-    private val defaultVoiceName = "alloy"
 
     private lateinit var entries: MutableList<TTSProviderEntry>
     private lateinit var adapter: TTSProviderEntryAdapter
@@ -95,6 +92,19 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             editVoiceName.showDropDown()
         }
 
+        // Set autocomplete adapter for audio formats on the dialog view's TextInputEditText
+        selectAudioFormat.setAdapter(
+            ArrayAdapter(
+                requireContext(), android.R.layout.simple_list_item_1, defaultAudioFormats
+            )
+        )
+        selectAudioFormat.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) selectAudioFormat.showDropDown()
+        }
+        selectAudioFormat.setOnClickListener {
+            selectAudioFormat.showDropDown()
+        }
+
         if (entry != null) {
             // Editing: prefill fields with current entry data
             editName.setText(entry.name)
@@ -110,12 +120,12 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             // Adding new: prefill with defaults
             editName.setText(defaultName)
             editApiBaseUrl.setText(defaultApiBaseUrl)
-            editVoiceName.setText(defaultVoiceName)
+            editVoiceName.setText(defaultVoices[0])
             editPricePer1M.setText(defaultPricePer1M.toString())
             editMaxChunkLength.setText(defaultMaxChunk.toString())
             editApiKey.setText("")
             editModelName.setText(defaultModelName)
-            selectAudioFormat.setText(defaultAudioFormat)
+            selectAudioFormat.setText(defaultAudioFormats[0])
             editAsyncSynthesization.isChecked = defaultAsyncSynthesization
         }
 
