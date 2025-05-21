@@ -15,7 +15,9 @@ data class TTSProviderEntry(
     var voiceName: String,
     var pricePer1MCharacters: Double,
     var maxChunkLength: Int,
-    var modelName: String
+    var modelName: String,
+    var asyncSynthesization: Boolean,
+    var audioFormat: String
 )
 
 object TTSProviderEntryStorage {

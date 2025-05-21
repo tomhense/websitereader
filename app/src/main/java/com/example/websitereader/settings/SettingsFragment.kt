@@ -12,6 +12,7 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.websitereader.R
 import com.example.websitereader.databinding.FragmentSettingsBinding
+import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputEditText
@@ -25,6 +26,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         "alloy", "ash", "ballad", "coral", "echo", "fable", "nova", "onyx", "sage", "shimmer"
     )
     private val defaultModelName = "gpt-4o-mini-tts"
+    private val defaultAudioFormat = "mp3"
+    private val defaultAsyncSynthesization = false
 
     // Added a default voice name; assuming "alloy" as default
     private val defaultVoiceName = "alloy"
@@ -73,6 +76,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
         val editMaxChunkLength = dialogView.findViewById<TextInputEditText>(R.id.editMaxChunkLength)
         val editApiKey = dialogView.findViewById<TextInputEditText>(R.id.editApiKey)
         val editModelName = dialogView.findViewById<TextInputEditText>(R.id.editModelName)
+        val audioFormat = dialogView.findViewById<MaterialAutoCompleteTextView>(R.id.selectAudioFormat)
+        val asyncSynthesization = dialogView.findViewById<MaterialCheckBox>(R.id.checkBoxAsyncSynthesization)
 
         // Set autocomplete adapter for voice names on the dialog view's TextInputEditText
         editVoiceName.setAdapter(
@@ -97,6 +102,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             editMaxChunkLength.setText(entry.maxChunkLength.toString())
             editApiKey.setText(entry.apiKey)
             editModelName.setText(entry.modelName)
+            audioFormat.setText(entry.audioFormat)
+            asyncSynthesization.isChecked = entry.asyncSynthesization
         } else {
             // Adding new: prefill with defaults
             editName.setText(defaultName)
@@ -106,6 +113,8 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
             editMaxChunkLength.setText(defaultMaxChunk.toString())
             editApiKey.setText("")
             editModelName.setText(defaultModelName)
+            audioFormat.setText(defaultAudioFormat)
+            asyncSynthesization.isChecked = defaultAsyncSynthesization
         }
 
         MaterialAlertDialogBuilder(requireContext()).setTitle(if (editIndex != null) "Edit Provider" else "Add Provider")
@@ -117,11 +126,12 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                 val maxChunkStr = editMaxChunkLength.text?.toString()?.trim().orEmpty()
                 val apiKey = editApiKey.text?.toString()?.trim().orEmpty()
                 val modelName = editModelName.text?.toString()?.trim().orEmpty()
-
                 val price = priceStr.toDoubleOrNull()
                 val maxChunk = maxChunkStr.toIntOrNull()
+                val audioFormat = audioFormat.text?.toString()?.trim().orEmpty()
+                val asyncSynthesization = asyncSynthesization.isChecked
 
-                if (name.isEmpty() || apiBaseUrl.isEmpty() || voiceName.isEmpty() || price == null || maxChunk == null) {
+                if (name.isEmpty() || apiBaseUrl.isEmpty() || voiceName.isEmpty() || price == null || maxChunk == null || audioFormat.isEmpty()) {
                     Toast.makeText(
                         requireContext(),
                         "Please fill in all fields with valid values",
@@ -140,7 +150,9 @@ class SettingsFragment : Fragment(R.layout.fragment_settings) {
                     pricePer1MCharacters = price,
                     maxChunkLength = maxChunk,
                     apiKey = apiKey,
-                    modelName = modelName
+                    modelName = modelName,
+                    audioFormat = audioFormat,
+                    asyncSynthesization = asyncSynthesization
                 )
 
                 if (editIndex != null) {

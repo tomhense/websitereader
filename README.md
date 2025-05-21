@@ -41,8 +41,6 @@ characters. ([Source](https://platform.openai.com/tokenizer))
 
 ### ToDo
 
-- Make audioFormat used configurable per tts provider
-- Add a setting per tts provider for weather to use async api calls
 - Make supported languages configurable
 - Add disclaimer about api costs that shows when the generate button is clicked the first time
 - Better checks for adding tts provider
