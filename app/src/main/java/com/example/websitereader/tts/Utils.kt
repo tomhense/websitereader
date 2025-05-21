@@ -1,18 +1,15 @@
 package com.example.websitereader.tts
 
+import android.media.AudioFormat
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
-import android.media.MediaMuxer
-import android.os.Build
-import androidx.annotation.RequiresApi
-import kotlinx.coroutines.suspendCancellableCoroutine
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
+import java.nio.ByteOrder
 
 object Utils {
     fun splitTextIntoShortChunks(text: String, maxChunkLength: Int): List<String> {
@@ -80,78 +77,160 @@ object Utils {
         return list
     }
 
-    // Concatenate audio files using remuxing, this works all major audio encodings except wave and pcm
-    @RequiresApi(Build.VERSION_CODES.Q)
-    suspend fun concatAudioFilesByRemuxing(
-        audioFiles: List<File>, output: File, audioFormat: String
-    ): Boolean = suspendCancellableCoroutine { continuation ->
-        try {
-            // Create a MediaMuxer to write the output file
-            val muxer: MediaMuxer = when (audioFormat) {
-                "opus" -> MediaMuxer(output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_OGG)
-                "mp3" -> MediaMuxer(
-                    output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
-                )
+    data class WavSpec(
+        val sampleRate: Int,
+        val channelCount: Int,
+        val pcmEncoding: Int   // e.g. AudioFormat.ENCODING_PCM_16BIT
+    )
 
-                else -> throw IllegalArgumentException("Unsupported audio format: $audioFormat")
+    fun decodeToPcmBytes(audioFile: File): Pair<ByteArray, WavSpec> {
+        val extractor = MediaExtractor()
+        extractor.setDataSource(audioFile.absolutePath)
+        var trackIndex = -1
+        var format: MediaFormat? = null
+        for (i in 0 until extractor.trackCount) {
+            val f = extractor.getTrackFormat(i)
+            val mime = f.getString(MediaFormat.KEY_MIME) ?: ""
+            if (mime.startsWith("audio/")) {
+                trackIndex = i
+                format = f
+                break
             }
+        }
+        require(trackIndex != -1) { "No audio track found" }
+        extractor.selectTrack(trackIndex)
+        val mime = format!!.getString(MediaFormat.KEY_MIME)!!
+        val codec = MediaCodec.createDecoderByType(mime)
+        codec.configure(format, null, null, 0)
+        codec.start()
 
-            // Keep track of track index
-            var audioTrackIndex = -1
-            var isMuxerStarted = false
-            audioFiles.forEach { file ->
-                val extractor = MediaExtractor()
-                extractor.setDataSource(file.absolutePath)
-                // Find the audio track
-                val trackIndex = (0 until extractor.trackCount).firstOrNull { index ->
-                    val format = extractor.getTrackFormat(index)
-                    format.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") ?: false
-                } ?: return@forEach
-                extractor.selectTrack(trackIndex)
-                val format = extractor.getTrackFormat(trackIndex)
-                // Add track to muxer if not already added
-                if (audioTrackIndex == -1) {
-                    audioTrackIndex = muxer.addTrack(format)
-                    muxer.start()
-                    isMuxerStarted = true
-                }
-                // Extract and write the samples
-                val buffer = ByteBuffer.allocate(1024 * 1024)
-                val bufferInfo = MediaCodec.BufferInfo()
-                extractor.selectTrack(trackIndex)
-                while (true) {
-                    bufferInfo.offset = 0
-                    bufferInfo.size = extractor.readSampleData(buffer, 0)
-                    if (bufferInfo.size < 0) {
-                        extractor.unselectTrack(trackIndex)
-                        break
+        // Get audio info
+        val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+        val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+        // We'll output 16-bit PCM
+        val pcmEncoding = AudioFormat.ENCODING_PCM_16BIT
+
+        // Prepare buffers
+        val output = ByteArrayOutputStream()
+        val inputBuffers = codec.inputBuffers
+        val outputBuffers = codec.outputBuffers
+        val bufferInfo = MediaCodec.BufferInfo()
+
+        var sawInputEOS = false
+        var sawOutputEOS = false
+
+        while (!sawOutputEOS) {
+            if (!sawInputEOS) {
+                val inputBufIdx = codec.dequeueInputBuffer(10000)
+                if (inputBufIdx >= 0) {
+                    val inputBuf = inputBuffers[inputBufIdx]
+                    val sampleSize = extractor.readSampleData(inputBuf, 0)
+                    if (sampleSize < 0) {
+                        codec.queueInputBuffer(
+                            inputBufIdx, 0, 0, 0L, MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                        )
+                        sawInputEOS = true
                     } else {
-                        bufferInfo.presentationTimeUs = extractor.sampleTime
-                        // Map extractor flags to codec flags
-                        bufferInfo.flags = 0
-                        val sampleFlags = extractor.sampleFlags
-                        if (sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) {
-                            bufferInfo.flags = bufferInfo.flags or MediaCodec.BUFFER_FLAG_KEY_FRAME
-                        }
-                        if (sampleFlags and MediaExtractor.SAMPLE_FLAG_PARTIAL_FRAME != 0) {
-                            bufferInfo.flags =
-                                bufferInfo.flags or MediaCodec.BUFFER_FLAG_PARTIAL_FRAME
-                        }
-                        // Add more flag mappings if needed
-                        muxer.writeSampleData(audioTrackIndex, buffer, bufferInfo)
+                        val presentationTimeUs = extractor.sampleTime
+                        codec.queueInputBuffer(inputBufIdx, 0, sampleSize, presentationTimeUs, 0)
                         extractor.advance()
                     }
                 }
-                extractor.release()
             }
-            if (isMuxerStarted) {
-                muxer.stop()
-                muxer.release()
+            val outputBufIdx = codec.dequeueOutputBuffer(bufferInfo, 10000)
+            when {
+                outputBufIdx >= 0 -> {
+                    val outBuf = outputBuffers[outputBufIdx]
+                    val chunk = ByteArray(bufferInfo.size)
+                    outBuf.position(bufferInfo.offset)
+                    outBuf.limit(bufferInfo.offset + bufferInfo.size)
+                    outBuf.get(chunk)
+                    output.write(chunk)
+                    codec.releaseOutputBuffer(outputBufIdx, false)
+                    if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+                        sawOutputEOS = true
+                    }
+                }
+
+                outputBufIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    // You can check format consistency here if needed
+                }
             }
-            continuation.resume(true)
-        } catch (e: Exception) {
-            // Handle exceptions and resume with false
-            continuation.resumeWithException(e)
+        }
+        codec.stop()
+        codec.release()
+        extractor.release()
+        val wavSpec = WavSpec(sampleRate, channelCount, pcmEncoding)
+        return output.toByteArray() to wavSpec
+    }
+
+    fun makePcmWavHeader(
+        totalDataLen: Int, numChannels: Int, sampleRate: Int, bitsPerSample: Int
+    ): ByteArray {
+        val header = ByteArray(44)
+        val byteRate = sampleRate * numChannels * bitsPerSample / 8
+        val blockAlign = numChannels * bitsPerSample / 8
+        val chunkSize = 36 + totalDataLen
+        // RIFF header
+        header[0] = 'R'.toByte(); header[1] = 'I'.toByte(); header[2] = 'F'.toByte(); header[3] =
+            'F'.toByte()
+        ByteBuffer.wrap(header, 4, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(chunkSize)
+        header[8] = 'W'.toByte(); header[9] = 'A'.toByte(); header[10] = 'V'.toByte(); header[11] =
+            'E'.toByte()
+        // fmt subchunk
+        header[12] = 'f'.toByte(); header[13] = 'm'.toByte(); header[14] =
+            't'.toByte(); header[15] = ' '.toByte()
+        ByteBuffer.wrap(header, 16, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(16) // PCM
+        ByteBuffer.wrap(header, 20, 2).order(ByteOrder.LITTLE_ENDIAN)
+            .putShort(1) // Audio format = PCM
+        ByteBuffer.wrap(header, 22, 2).order(ByteOrder.LITTLE_ENDIAN)
+            .putShort(numChannels.toShort())
+        ByteBuffer.wrap(header, 24, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(sampleRate)
+        ByteBuffer.wrap(header, 28, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(byteRate)
+        ByteBuffer.wrap(header, 32, 2).order(ByteOrder.LITTLE_ENDIAN).putShort(blockAlign.toShort())
+        ByteBuffer.wrap(header, 34, 2).order(ByteOrder.LITTLE_ENDIAN)
+            .putShort(bitsPerSample.toShort())
+        // data subchunk
+        header[36] = 'd'.toByte(); header[37] = 'a'.toByte(); header[38] =
+            't'.toByte(); header[39] = 'a'.toByte()
+        ByteBuffer.wrap(header, 40, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(totalDataLen)
+        return header
+    }
+
+    fun concatAudioFilesToWav(
+        inputFiles: List<File>,
+        outputFile: File,
+        templateWavHeader: ByteArray = ByteArray(44) // Standard PCM WAV header size
+    ) {
+        require(inputFiles.isNotEmpty()) { "No input files" }
+        val pcmStreams = mutableListOf<ByteArray>()
+        var wavSpec: WavSpec? = null
+        for ((i, file) in inputFiles.withIndex()) {
+            val (pcm, spec) = decodeToPcmBytes(file)
+            if (wavSpec == null) {
+                wavSpec = spec
+            } else {
+                require(
+                    spec.sampleRate == wavSpec.sampleRate && spec.channelCount == wavSpec.channelCount && spec.pcmEncoding == wavSpec.pcmEncoding
+                ) { "All inputs must have same sample rate/channels/encoding" }
+            }
+            pcmStreams.add(pcm)
+        }
+        val totalPcmLen = pcmStreams.sumOf { it.size }
+
+        // Prepare header
+        // Create a template header modeled after PCM WAV
+        // If you have an existing WAV you want to match, pass its first 44 bytes as templateWavHeader
+        val header = makePcmWavHeader(
+            totalDataLen = totalPcmLen,
+            numChannels = wavSpec!!.channelCount,
+            sampleRate = wavSpec.sampleRate,
+            bitsPerSample = 16 // Because we always use PCM 16-bit output
+        )
+
+        FileOutputStream(outputFile).use { out ->
+            out.write(header)
+            for (pcm in pcmStreams) out.write(pcm)
         }
     }
 
