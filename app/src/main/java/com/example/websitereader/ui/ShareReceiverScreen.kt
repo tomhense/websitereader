@@ -1,5 +1,6 @@
 package com.example.websitereader.ui
 
+import android.net.Uri
 import android.util.Patterns
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
@@ -31,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.example.websitereader.processSharedUrlLogic
 import com.example.websitereader.settings.TTSProviderEntry
 import com.example.websitereader.settings.TTSProviderEntryStorage
 import kotlinx.coroutines.CoroutineScope
@@ -40,13 +43,13 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShareReceiverScreen(
-    sharedUrl: String, finishActivity: () -> Unit
+    sharedUrl: String,
+    finishActivity: () -> Unit
 ) {
     val context = LocalContext.current
     var urlToProcess by remember { mutableStateOf(sharedUrl) }
     var urlError by remember { mutableStateOf<String?>(null) }
 
-    var ttsProviders by remember { mutableStateOf<TTSProviderEntry?>(null) }
     var ttsProviderList by remember { mutableStateOf(listOf<TTSProviderEntry>()) }
     var selectedTTSProviderIndex by remember { mutableStateOf<Int?>(null) }
 
@@ -54,123 +57,116 @@ fun ShareReceiverScreen(
     var generationResult by remember { mutableStateOf<String?>(null) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
-    // Load TTS Providers from persistence
+    // Load TTS Providers (migrated from Activity onCreate-style logic)
     LaunchedEffect(Unit) {
         val providers = TTSProviderEntryStorage.load(context).toList()
         ttsProviderList = providers
         selectedTTSProviderIndex = if (providers.isNotEmpty()) 0 else null
     }
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text("Share to Website Reader") })
-    }, floatingActionButton = {
-        if (!isGenerating) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Share URL to Audio") }
+            )
+        },
+        floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    // Validation
+                    // Input validation
                     if (!Patterns.WEB_URL.matcher(urlToProcess).matches()) {
                         urlError = "Invalid URL"
                         return@FloatingActionButton
                     }
-                    if (selectedTTSProviderIndex == null) {
-                        errorMsg = "Please select a TTS provider"
+                    val ttsProvider = selectedTTSProviderIndex?.let { idx -> ttsProviderList[idx] }
+                    if (ttsProvider == null) {
+                        errorMsg = "No TTS provider selected"
                         return@FloatingActionButton
                     }
-                    urlError = null
-                    errorMsg = null
                     isGenerating = true
+                    errorMsg = null
+                    generationResult = null
 
-                    // Example: launch your backend audio generation logic
-                    val provider = ttsProviderList[selectedTTSProviderIndex!!]
+                    // kick off coroutine for non-UI work (migrated logic)
                     CoroutineScope(Dispatchers.Main).launch {
-                        try {
-                            // TODO: Call your service/UI logic for generating audio below
-                            // This is a placeholder, you should use your actual connection/service:
-                            // audioGenerationServiceConnector.generate(...)
-                            // For demonstration, simulate a result:
-                            kotlinx.coroutines.delay(2000)
-                            generationResult = "Audio generation complete!"
-                        } catch (e: Exception) {
-                            errorMsg = e.message
-                        }
-                        isGenerating = false
+                        processSharedUrlLogic(
+                            context = context,
+                            url = urlToProcess,
+                            ttsProvider = ttsProvider,
+                            onAudioFileReady = { uri: Uri ->
+                                isGenerating = false
+                                generationResult = "Audio file ready: $uri"
+                                // Optionally: auto-launch playback, or show snackbar, etc
+                                finishActivity()
+                            },
+                            onError = { e ->
+                                isGenerating = false
+                                errorMsg = e.message ?: "Unknown error"
+                            }
+                        )
                     }
-                }) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Generate")
+                }
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send/Generate")
             }
         }
-    }) { padding ->
+    ) { padding ->
         Column(
             Modifier
+                .fillMaxWidth()
                 .padding(padding)
                 .padding(16.dp)
         ) {
             OutlinedTextField(
                 value = urlToProcess,
-                onValueChange = { urlToProcess = it },
-                label = { Text("Article URL") },
+                onValueChange = {
+                    urlToProcess = it
+                    urlError = null
+                },
                 isError = urlError != null,
-                singleLine = true,
+                label = { Text("Article URL") },
                 modifier = Modifier.fillMaxWidth()
             )
             if (urlError != null) {
-                Text(urlError!!, color = MaterialTheme.colorScheme.error)
+                Text(
+                    text = urlError!!,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text("TTS Provider", style = MaterialTheme.typography.bodySmall)
-            if (ttsProviderList.isEmpty()) {
-                Text(
-                    "No TTS Providers found. Add one in Settings.",
-                    color = MaterialTheme.colorScheme.error
-                )
-            } else {
-                LazyColumn {
-                    itemsIndexed(ttsProviderList) { idx, entry ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedTTSProviderIndex = idx }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            RadioButton(
-                                selected = idx == selectedTTSProviderIndex,
-                                onClick = { selectedTTSProviderIndex = idx })
-                            Text(text = entry.name, modifier = Modifier.padding(start = 8.dp))
-                        }
+            Spacer(Modifier.height(16.dp))
+            Text("Choose TTS Provider:")
+            LazyColumn {
+                itemsIndexed(ttsProviderList) { idx, provider ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedTTSProviderIndex = idx }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        RadioButton(
+                            selected = selectedTTSProviderIndex == idx,
+                            onClick = { selectedTTSProviderIndex = idx }
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(provider.name)
                     }
                 }
             }
 
-            Spacer(Modifier.height(24.dp))
-
             if (isGenerating) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                ) {
-                    CircularProgressIndicator()
-                    Text(
-                        " Generating audio... Please wait.",
-                        modifier = Modifier.padding(start = 16.dp)
-                    )
-                }
+                Spacer(Modifier.height(20.dp))
+                CircularProgressIndicator()
             }
-            if (generationResult != null) {
-                Text(
-                    generationResult!!,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 18.dp)
-                )
+
+            errorMsg?.let {
+                Spacer(Modifier.height(16.dp))
+                Text(it, color = MaterialTheme.colorScheme.error)
             }
-            if (errorMsg != null) {
-                Text(
-                    errorMsg!!,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 18.dp)
-                )
+            generationResult?.let {
+                Spacer(Modifier.height(16.dp))
+                Text(it, color = MaterialTheme.colorScheme.primary)
             }
         }
     }
