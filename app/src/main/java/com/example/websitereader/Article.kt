@@ -35,7 +35,7 @@ class Article(
 
                     // wholeText contains untrimmed and unnormalized text, linebreaks are preserved,
                     // perfect for a preview. But we should remove trim it a bit and remove excessive linebreaks
-                    var wholeText = article.articleContent?.wholeText()
+                    val wholeText = article.articleContent?.wholeText()
                         ?.trim()
                         ?.replace(Regex("[ \\t]+"), " ")
                         ?.replace(Regex("\r\n"), "\n")
