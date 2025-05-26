@@ -2,7 +2,6 @@ package com.example.websitereader.ui
 
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
 import android.util.Patterns
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -41,14 +40,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat.startActivity
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.websitereader.PreviewArticle
 import com.example.websitereader.R
 import com.example.websitereader.model.Article
 import com.example.websitereader.model.TTSProvider
 import com.example.websitereader.processSharedUrlLogic
-import com.example.websitereader.settings.TTSProviderViewModel
+import com.example.websitereader.settings.TTSProviderStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -60,14 +57,10 @@ fun ShareReceiverScreen(
 ) {
     val context = LocalContext.current
 
-    //val viewModel: TTSProviderViewModel = viewModel()
-    val viewModel =
-        viewModel<TTSProviderViewModel>(viewModelStoreOwner = LocalContext.current as ViewModelStoreOwner)
-
     var urlToProcess by remember { mutableStateOf(sharedUrl) }
     var urlError by remember { mutableStateOf<String?>(null) }
 
-    val externalTTSProviderList by viewModel.providers.collectAsState()
+    val externalTTSProviderList by TTSProviderStore.providers.collectAsState()
     val ttsProviderList: List<TTSProvider> by remember {
         mutableStateOf(
             listOf(
@@ -82,12 +75,6 @@ fun ShareReceiverScreen(
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
     var article by remember { mutableStateOf<Article?>(null) }
-
-    // Load TTS Providers (migrated from Activity onCreate-style logic)
-    LaunchedEffect(Unit) {
-        Log.i("external_tts_providers", externalTTSProviderList.toString())
-        Log.d("TTSProviderVM", "Context: $context class: ${context.javaClass.name}")
-    }
 
     // Whenever urlToProcess changes, load the article
     LaunchedEffect(urlToProcess) {

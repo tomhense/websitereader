@@ -11,7 +11,7 @@ import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import com.example.websitereader.R
-import com.example.websitereader.settings.TTSProviderRepository
+import com.example.websitereader.settings.TTSProviderStore
 import com.example.websitereader.tts.Android
 import com.example.websitereader.tts.OpenAI
 import com.example.websitereader.tts.ProgressState
@@ -109,7 +109,8 @@ class ForegroundService : Service() {
                 // Select provider
                 val providerInstance: Provider = if (ttsProviderName != null) {
                     // Await the list, then find the matching provider
-                    val ttsProviders = TTSProviderRepository.load(this@ForegroundService).first()
+                    val ttsProviders =
+                        TTSProviderStore.providers.first()
                     val entry = ttsProviders.find { it.name == ttsProviderName }
                         ?: throw IllegalStateException("No provider found for $ttsProviderName")
                     OpenAI(this@ForegroundService, entry)

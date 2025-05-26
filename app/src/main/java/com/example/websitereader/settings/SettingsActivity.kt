@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        TTSProviderStore.load(this)
         setContent {
             SettingsScreen(finishActivity = { finish() })
         }

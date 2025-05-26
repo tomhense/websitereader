@@ -30,50 +30,39 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.websitereader.model.ExternalTTSProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(finishActivity: () -> Unit) {
-    //val viewModel: TTSProviderViewModel = viewModel()
-    val viewModel =
-        viewModel<TTSProviderViewModel>(viewModelStoreOwner = LocalContext.current as ViewModelStoreOwner)
-    val entries by viewModel.providers.collectAsState()
+    val context = LocalContext.current
+    val entries by TTSProviderStore.providers.collectAsState()
     var editingEntryIndex by remember { mutableStateOf<Int?>(null) }
     var showDialog by remember { mutableStateOf(false) }
     var dialogEntry by remember { mutableStateOf<ExternalTTSProvider?>(null) }
 
-    Scaffold(
-        topBar = { TopAppBar(title = { Text("TTS Providers") }) },
-        floatingActionButton = {
-            FloatingActionButton(onClick = {
-                showDialog = true
-                dialogEntry = null
-                editingEntryIndex = null
-            }) {
-                Icon(Icons.Default.Add, contentDescription = "Add")
-            }
+    Scaffold(topBar = { TopAppBar(title = { Text("TTS Providers") }) }, floatingActionButton = {
+        FloatingActionButton(onClick = {
+            showDialog = true
+            dialogEntry = null
+            editingEntryIndex = null
+        }) {
+            Icon(Icons.Default.Add, contentDescription = "Add")
         }
-    ) { padding ->
+    }) { padding ->
         LazyColumn(
             Modifier
                 .padding(padding)
                 .fillMaxSize()
         ) {
             itemsIndexed(entries) { idx, entry ->
-                TTSProviderEntryItem(
-                    entry = entry,
-                    onEdit = {
-                        showDialog = true
-                        dialogEntry = entry
-                        editingEntryIndex = idx
-                    },
-                    onDelete = {
-                        viewModel.removeProvider(idx)
-                    }
-                )
+                TTSProviderEntryItem(entry = entry, onEdit = {
+                    showDialog = true
+                    dialogEntry = entry
+                    editingEntryIndex = idx
+                }, onDelete = {
+                    TTSProviderStore.removeProvider(context, idx)
+                })
             }
         }
         if (showDialog) {
@@ -82,22 +71,23 @@ fun SettingsScreen(finishActivity: () -> Unit) {
                 onDismiss = { showDialog = false },
                 onSave = { updated: ExternalTTSProvider ->
                     if (editingEntryIndex != null) {
-                        viewModel.updateProvider(editingEntryIndex!!, updated)
+                        TTSProviderStore.updateProvider(
+                            context,
+                            editingEntryIndex!!,
+                            updated
+                        )
                     } else {
-                        viewModel.addProvider(updated)
+                        TTSProviderStore.addProvider(context, updated)
                     }
                     showDialog = false
-                }
-            )
+                })
         }
     }
 }
 
 @Composable
 fun TTSProviderEntryItem(
-    entry: ExternalTTSProvider,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+    entry: ExternalTTSProvider, onEdit: () -> Unit, onDelete: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -105,8 +95,7 @@ fun TTSProviderEntryItem(
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Row(
-            Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(Modifier.weight(1f)) {
                 Text(entry.name, style = MaterialTheme.typography.labelMedium)
