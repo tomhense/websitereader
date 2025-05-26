@@ -12,6 +12,7 @@ import androidx.core.app.NotificationManagerCompat
 import com.example.websitereader.R
 import com.example.websitereader.model.Article
 import com.example.websitereader.settings.TTSProviderStore
+import com.example.websitereader.tts.Android
 import com.example.websitereader.tts.OpenAI
 import com.example.websitereader.tts.ProgressState
 import com.example.websitereader.tts.Provider
@@ -105,14 +106,16 @@ class ForegroundService : Service() {
         serviceScope.launch {
             try {
                 // Select provider
-                val providerInstance: Provider = run {
-                    // Await the list, then find the matching provider
-                    val ttsProviders =
-                        TTSProviderStore.providers.first()
-                    val entry = ttsProviders.find { it.name == ttsProviderName }
-                        ?: throw IllegalStateException("No provider found for $ttsProviderName")
-                    OpenAI(this@ForegroundService, entry)
-                }
+                val providerInstance: Provider =
+                    if (ttsProviderName == getString(R.string.system_tts_provider_name)) {
+                        Android(this@ForegroundService)
+                    } else {
+                        // Await the list, then find the matching provider
+                        val ttsProviders = TTSProviderStore.providers.first()
+                        val entry = ttsProviders.find { it.name == ttsProviderName }
+                            ?: throw IllegalStateException("No provider found for $ttsProviderName")
+                        OpenAI(this@ForegroundService, entry)
+                    }
 
                 val fileName = article.headline.replace(
                     Regex("[^a-zA-Z0-9]"),

@@ -1,10 +1,13 @@
 package com.example.websitereader.ui
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -17,21 +20,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
 import com.example.websitereader.R
-import kotlinx.coroutines.delay
+import com.example.websitereader.audioplayer.AudioPlayer
 
 // Helper to format ms to mm:ss
 private fun formatTime(millis: Long): String {
@@ -41,92 +44,78 @@ private fun formatTime(millis: Long): String {
     return "%02d:%02d".format(minutes, seconds)
 }
 
+
 @Composable
-fun AudioControllerCard(
-    audioUrl: String, modifier: Modifier = Modifier
+fun AudioPlayerCard(
+    audioPlayer: AudioPlayer, audioUri: Uri, modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    // ExoPlayer setup
-    val exoPlayer = remember(context) {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(audioUrl))
-            prepare()
-        }
-    }
+    rememberCoroutineScope()
 
-    var isPlaying by remember { mutableStateOf(false) }
-    var position by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
-    var userIsSeeking by remember { mutableStateOf(false) }
+    // Remember state from AudioPlayer
+    val isPlaying by audioPlayer.isPlaying.collectAsState()
+    val position by audioPlayer.position.collectAsState()
+    val duration by audioPlayer.duration.collectAsState()
 
-    // Periodically update the position and duration
-    LaunchedEffect(isPlaying) {
-        while (true) {
-            if (!userIsSeeking) {
-                position = exoPlayer.currentPosition
-            }
-            duration = exoPlayer.duration.coerceAtLeast(0)
-            delay(500)
-        }
-    }
+    var userSeeking by remember { mutableStateOf(false) }
+    var sliderPosition by remember { mutableFloatStateOf(0f) }
 
-    // Dispose ExoPlayer when the composable leaves composition
-    DisposableEffect(Unit) {
-        onDispose {
-            exoPlayer.release()
-        }
+    // Set up initial play
+    LaunchedEffect(audioUri) {
+        audioPlayer.playAudio(audioUri)
     }
 
     Card(
-        modifier = modifier.padding(16.dp),
-        shape = RoundedCornerShape(16.dp),
+        modifier = modifier.padding(8.dp),
+        shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Audio Player", style = MaterialTheme.typography.headlineMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Play/Pause Button
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                IconButton(onClick = {
-                    if (exoPlayer.isPlaying) {
-                        exoPlayer.pause()
-                        isPlaying = false
-                    } else {
-                        exoPlayer.play()
-                        isPlaying = true
-                    }
-                }) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Text(
+                audioUri.lastPathSegment ?: "", style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { audioPlayer.playPause() }) {
                     if (isPlaying) {
                         Icon(
+                            contentDescription = "Pause",
                             painter = painterResource(R.drawable.baseline_pause_24),
-                            contentDescription = "Pause"
+                            modifier = Modifier.size(48.dp)
                         )
                     } else {
                         Icon(
-                            imageVector = Icons.Default.PlayArrow, contentDescription = "Play"
+                            contentDescription = "Play",
+                            imageVector = Icons.Default.PlayArrow,
+                            modifier = Modifier.size(48.dp)
                         )
                     }
                 }
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    text = formatTime(position) + " / " + formatTime(duration),
-                    style = MaterialTheme.typography.bodyMedium
+                    formatTime(position) + " / " + formatTime(duration),
+                    style = MaterialTheme.typography.bodyLarge
                 )
             }
-
-            // Seek bar
-            Slider(
-                value = if (duration != 0L) position / duration.toFloat() else 0f,
-                onValueChange = { value ->
-                    userIsSeeking = true
-                    position = (duration * value).toLong()
-                },
-                onValueChangeFinished = {
-                    userIsSeeking = false
-                    exoPlayer.seekTo(position)
-                })
         }
+
+        // Progress Slider
+        Slider(
+            value = if (duration > 0) (if (userSeeking) sliderPosition else position / duration.toFloat()) else 0f,
+            onValueChange = { value ->
+                userSeeking = true
+                sliderPosition = value
+            },
+            onValueChangeFinished = {
+                // seek to new position
+                audioPlayer.seekTo((duration * sliderPosition).toLong())
+                userSeeking = false
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        )
     }
 }
-
