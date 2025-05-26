@@ -2,6 +2,7 @@ package com.example.websitereader
 
 import android.content.Context
 import android.net.Uri
+import com.example.websitereader.model.Article
 import com.example.websitereader.settings.TTSProviderEntry
 
 suspend fun processSharedUrlLogic(

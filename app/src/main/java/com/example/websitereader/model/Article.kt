@@ -1,4 +1,4 @@
-package com.example.websitereader
+package com.example.websitereader.model
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
