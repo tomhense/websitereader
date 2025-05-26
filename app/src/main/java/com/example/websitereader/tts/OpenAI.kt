@@ -33,7 +33,7 @@ class OpenAI(
     private val apiKey = ttsProviderEntry.apiKey
     private val maxChunkLength = ttsProviderEntry.maxChunkLength
     private val voiceName = ttsProviderEntry.voiceName
-    private val audioFormat = ttsProviderEntry.audioFormat
+    override val audioFormat = ttsProviderEntry.audioFormat
     private val modelName = ttsProviderEntry.modelName
     private val asyncSynthesization = ttsProviderEntry.asyncSynthesization
 

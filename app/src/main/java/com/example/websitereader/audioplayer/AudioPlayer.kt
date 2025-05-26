@@ -1,4 +1,4 @@
-package com.example.websitereader
+package com.example.websitereader.audioplayer
 
 import android.content.ComponentName
 import android.content.Context

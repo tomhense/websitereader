@@ -7,18 +7,24 @@ import android.os.IBinder
 class AudioGenerationServiceConnector(
     private val onProgress: (Float) -> Unit,
     private val onServiceConnectedCallback: (ForegroundService) -> Unit = {},
-    private val onServiceDisconnectedCallback: () -> Unit = {}
+    private val onServiceDisconnectedCallback: () -> Unit = {},
+    private val onSucceeded: (String) -> Unit,
+    private val onError: (String) -> Unit
 ) : ServiceConnection {
-    var service: ForegroundService? = null
-        private set
-    var bound: Boolean = false
-        private set
+    private var service: ForegroundService? = null
+    private var bound: Boolean = false
 
     override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
         service = (binder as ForegroundService.LocalBinder).getService()
         bound = true
         binder.setProgressListener { progress ->
             onProgress(progress.toFloat())
+        }
+        binder.setSucceededListener { result ->
+            onSucceeded(result)
+        }
+        binder.setErrorListener { error ->
+            onError(error)
         }
         onServiceConnectedCallback(service!!)
     }

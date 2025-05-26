@@ -2,6 +2,9 @@ package com.example.websitereader.model
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import net.dankito.readability4j.extended.Readability4JExtended
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -9,6 +12,7 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
 
+@Serializable
 class Article(
     val url: String,
     var lang: String?,
@@ -18,7 +22,6 @@ class Article(
 ) {
 
     companion object {
-        private val okHttpClient = OkHttpClient()
 
         suspend fun fromUrl(url: String): Article? {
             return withContext(Dispatchers.IO) {
@@ -57,12 +60,21 @@ class Article(
 
         @Throws(IOException::class)
         private fun fetchUrl(url: String): String {
+            val okHttpClient = OkHttpClient()
             val request = Request.Builder().url(url).build()
             okHttpClient.newCall(request).execute().use { response ->
                 return response.body?.string()
                     ?: throw IOException("Unexpected empty response body")
             }
         }
+
+        fun fromJson(json: String): Article {
+            return Json.decodeFromString(json)
+        }
+    }
+
+    fun toJson(): String {
+        return Json.encodeToString(this)
     }
 }
 

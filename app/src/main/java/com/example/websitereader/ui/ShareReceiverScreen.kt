@@ -1,8 +1,13 @@
 package com.example.websitereader.ui
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.util.Patterns
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -27,9 +33,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,17 +46,32 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat.startActivity
+import androidx.core.net.toUri
 import com.example.websitereader.PreviewArticle
 import com.example.websitereader.R
+import com.example.websitereader.audioplayer.AudioPlayer
+import com.example.websitereader.foregroundservice.AudioGenerationServiceConnector
+import com.example.websitereader.foregroundservice.ForegroundService
 import com.example.websitereader.model.Article
 import com.example.websitereader.model.TTSProvider
-import com.example.websitereader.processSharedUrlLogic
 import com.example.websitereader.settings.TTSProviderStore
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+
+private fun copyFile(context: Context, sourceUri: Uri, destUri: Uri) {
+    try {
+        context.contentResolver.openInputStream(sourceUri)?.use { inputStream ->
+            context.contentResolver.openOutputStream(destUri)?.use { outputStream ->
+                inputStream.copyTo(outputStream)
+            }
+        }
+        Toast.makeText(context, "File copied successfully!", Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        Log.e("ShareReceiver", "File copy failed: ${e.message}")
+        Toast.makeText(context, "Error copying file: ${e.message}", Toast.LENGTH_LONG).show()
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,10 +94,59 @@ fun ShareReceiverScreen(
     var selectedTTSProviderIndex by remember { mutableStateOf<Int?>(0) }
 
     var isGenerating by remember { mutableStateOf(false) }
-    var generationResult by remember { mutableStateOf<String?>(null) }
+    var outputFile by remember { mutableStateOf<Uri?>(null) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
     var article by remember { mutableStateOf<Article?>(null) }
+
+    // Audio Player
+    var audioPlayer by remember { mutableStateOf<AudioPlayer>(AudioPlayer(context)) }
+
+    // Progress state
+    var progress by remember { mutableFloatStateOf(0f) }
+    var isBound by remember { mutableStateOf(false) }
+    var service by remember { mutableStateOf<ForegroundService?>(null) }
+
+    // Remember the connector so it's not recreated on every recomposition
+    val connector = remember {
+        AudioGenerationServiceConnector(
+            onProgress = { p -> progress = p },
+            onSucceeded = { result -> outputFile = result.toUri() },
+            onError = { error -> errorMsg = error },
+            onServiceConnectedCallback = { svc ->
+                service = svc
+                isBound = true
+            },
+            onServiceDisconnectedCallback = {
+                service = null
+                isBound = false
+            })
+    }
+
+    // Create file launcher
+    val fileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("*/*")
+    ) { destUri: Uri? ->
+        if (destUri != null) {
+            outputFile?.let { copyFile(context, it, destUri) }
+        } else {
+            Toast.makeText(
+                context,
+                "File not saved (no destination selected).",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+
+    // Bind/unbind using DisposableEffect (runs on enter/exit composition)
+    DisposableEffect(Unit) {
+        val intent = Intent(context, ForegroundService::class.java)
+        context.bindService(intent, connector, Context.BIND_AUTO_CREATE)
+        onDispose {
+            context.unbindService(connector)
+        }
+    }
 
     // Whenever urlToProcess changes, load the article
     LaunchedEffect(urlToProcess) {
@@ -114,27 +186,19 @@ fun ShareReceiverScreen(
                         errorMsg = "No TTS provider selected"
                         return@FloatingActionButton
                     }
+                    if (article == null) {
+                        return@FloatingActionButton
+                    }
+
                     isGenerating = true
                     errorMsg = null
-                    generationResult = null
 
-                    // kick off coroutine for non-UI work (migrated logic)
-                    CoroutineScope(Dispatchers.Main).launch {
-                        processSharedUrlLogic(
-                            context = context,
-                            url = urlToProcess,
-                            ttsProvider = ttsProvider,
-                            onAudioFileReady = { uri: Uri ->
-                                isGenerating = false
-                                generationResult = "Audio file ready: $uri"
-                                // Optionally: auto-launch playback, or show snackbar, etc
-                                finishActivity()
-                            },
-                            onError = { e ->
-                                isGenerating = false
-                                errorMsg = e.message ?: "Unknown error"
-                            })
-                    }
+                    val intent = Intent(context, ForegroundService::class.java)
+                    intent.putExtra(ForegroundService.EXTRA_ARTICLE, article!!.toJson())
+                    intent.putExtra(
+                        ForegroundService.EXTRA_PROVIDER_NAME,
+                        if (ttsProvider is com.example.websitereader.model.SystemTTSProvider) "System" else if (ttsProvider is com.example.websitereader.model.ExternalTTSProvider) ttsProvider.name else "Unknown"
+                    )
                 }) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send/Generate")
             }
@@ -209,10 +273,30 @@ fun ShareReceiverScreen(
                 Spacer(Modifier.height(16.dp))
                 Text(it, color = MaterialTheme.colorScheme.error)
             }
-            generationResult?.let {
+
+            outputFile?.let {
                 Spacer(Modifier.height(16.dp))
-                Text(it, color = MaterialTheme.colorScheme.primary)
+                IconButton(onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW)
+                    intent.setDataAndType(it, "audio/wav")
+                    startActivity(context, intent, null)
+                }) {
+                    Icon(
+                        painter = painterResource(R.drawable.baseline_article_24),
+                        contentDescription = stringResource(id = R.string.share_receiver_preview_article_button)
+                    )
+                }
+
+                AudioControllerCard(
+                    outputFile.toString(), modifier = Modifier.padding(top = 16.dp)
+                )
             }
         }
     }
+}
+
+@Preview
+@Composable
+fun ShareReceiverScreenPreview() {
+    ShareReceiverScreen(sharedUrl = "https://example.com", finishActivity = {})
 }
