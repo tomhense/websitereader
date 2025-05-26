@@ -2,6 +2,7 @@ package com.example.websitereader.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.util.Patterns
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -28,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,12 +41,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat.startActivity
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.websitereader.PreviewArticle
 import com.example.websitereader.R
 import com.example.websitereader.model.Article
+import com.example.websitereader.model.TTSProvider
 import com.example.websitereader.processSharedUrlLogic
-import com.example.websitereader.settings.TTSProviderEntry
-import com.example.websitereader.settings.TTSProviderEntryStorage
+import com.example.websitereader.settings.TTSProviderViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -52,14 +56,26 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShareReceiverScreen(
-    sharedUrl: String, finishActivity: () -> Unit
+    sharedUrl: String, finishActivity: () -> Unit,
 ) {
     val context = LocalContext.current
+
+    //val viewModel: TTSProviderViewModel = viewModel()
+    val viewModel =
+        viewModel<TTSProviderViewModel>(viewModelStoreOwner = LocalContext.current as ViewModelStoreOwner)
+
     var urlToProcess by remember { mutableStateOf(sharedUrl) }
     var urlError by remember { mutableStateOf<String?>(null) }
 
-    var ttsProviderList by remember { mutableStateOf(listOf<TTSProviderEntry>()) }
-    var selectedTTSProviderIndex by remember { mutableStateOf<Int?>(null) }
+    val externalTTSProviderList by viewModel.providers.collectAsState()
+    val ttsProviderList: List<TTSProvider> by remember {
+        mutableStateOf(
+            listOf(
+                com.example.websitereader.model.SystemTTSProvider
+            ) + externalTTSProviderList
+        )
+    }
+    var selectedTTSProviderIndex by remember { mutableStateOf<Int?>(0) }
 
     var isGenerating by remember { mutableStateOf(false) }
     var generationResult by remember { mutableStateOf<String?>(null) }
@@ -69,10 +85,8 @@ fun ShareReceiverScreen(
 
     // Load TTS Providers (migrated from Activity onCreate-style logic)
     LaunchedEffect(Unit) {
-        val providers = TTSProviderEntryStorage.load(context).toList()
-        ttsProviderList = providers
-        selectedTTSProviderIndex = if (providers.isNotEmpty()) 0 else null
-
+        Log.i("external_tts_providers", externalTTSProviderList.toString())
+        Log.d("TTSProviderVM", "Context: $context class: ${context.javaClass.name}")
     }
 
     // Whenever urlToProcess changes, load the article
@@ -190,7 +204,7 @@ fun ShareReceiverScreen(
                                 enabled = !isGenerating,
                                 onClick = { selectedTTSProviderIndex = idx })
                             Spacer(Modifier.width(12.dp))
-                            Text(provider.name)
+                            Text(if (provider is com.example.websitereader.model.SystemTTSProvider) "System" else if (provider is com.example.websitereader.model.ExternalTTSProvider) provider.name else "Unknown")
                         }
                     }
                 }

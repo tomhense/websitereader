@@ -31,6 +31,8 @@ preference = "1.2.1"
 activity-compose = { module = "androidx.activity:activity-compose" }
 androidx-appcompat-v140 = { module = "androidx.appcompat:appcompat", version.ref = "appcompatVersion" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences" }
+androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose" }
 androidx-material = { module = "androidx.compose.material:material" }
 androidx-media = { module = "androidx.media:media" }
 androidx-preference-ktx = { module = "androidx.preference:preference-ktx" }

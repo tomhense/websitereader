@@ -83,6 +83,7 @@ object Utils {
         val pcmEncoding: Int   // e.g. AudioFormat.ENCODING_PCM_16BIT
     )
 
+
     private fun decodeToPcmBytes(audioFile: File): Pair<ByteArray, WavSpec> {
         val extractor = MediaExtractor()
         extractor.setDataSource(audioFile.absolutePath)
@@ -110,12 +111,8 @@ object Utils {
         // We'll output 16-bit PCM
         val pcmEncoding = AudioFormat.ENCODING_PCM_16BIT
 
-        // Prepare buffers
         val output = ByteArrayOutputStream()
-        val inputBuffers = codec.inputBuffers
-        val outputBuffers = codec.outputBuffers
         val bufferInfo = MediaCodec.BufferInfo()
-
         var sawInputEOS = false
         var sawOutputEOS = false
 
@@ -123,7 +120,7 @@ object Utils {
             if (!sawInputEOS) {
                 val inputBufIdx = codec.dequeueInputBuffer(10000)
                 if (inputBufIdx >= 0) {
-                    val inputBuf = inputBuffers[inputBufIdx]
+                    val inputBuf = codec.getInputBuffer(inputBufIdx)!!
                     val sampleSize = extractor.readSampleData(inputBuf, 0)
                     if (sampleSize < 0) {
                         codec.queueInputBuffer(
@@ -137,13 +134,14 @@ object Utils {
                     }
                 }
             }
+
             val outputBufIdx = codec.dequeueOutputBuffer(bufferInfo, 10000)
             when {
                 outputBufIdx >= 0 -> {
-                    val outBuf = outputBuffers[outputBufIdx]
-                    val chunk = ByteArray(bufferInfo.size)
+                    val outBuf = codec.getOutputBuffer(outputBufIdx)!!
                     outBuf.position(bufferInfo.offset)
                     outBuf.limit(bufferInfo.offset + bufferInfo.size)
+                    val chunk = ByteArray(bufferInfo.size)
                     outBuf.get(chunk)
                     output.write(chunk)
                     codec.releaseOutputBuffer(outputBufIdx, false)
@@ -153,7 +151,11 @@ object Utils {
                 }
 
                 outputBufIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    // You can check format consistency here if needed
+                    // handle format change if needed
+                }
+
+                outputBufIdx == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                    // no available buffer, just skip for now
                 }
             }
         }
@@ -165,7 +167,7 @@ object Utils {
     }
 
     private fun makePcmWavHeader(
-        totalDataLen: Int, numChannels: Int, sampleRate: Int, bitsPerSample: Int = 16
+        totalDataLen: Int, numChannels: Int, sampleRate: Int, bitsPerSample: Int
     ): ByteArray {
         val header = ByteArray(44)
         val byteRate = sampleRate * numChannels * bitsPerSample / 8
@@ -173,12 +175,10 @@ object Utils {
         val chunkSize = 36 + totalDataLen
         // RIFF header
         header[0] = 'R'.code.toByte(); header[1] = 'I'.code.toByte(); header[2] =
-            'F'.code.toByte(); header[3] =
-            'F'.code.toByte()
+            'F'.code.toByte(); header[3] = 'F'.code.toByte()
         ByteBuffer.wrap(header, 4, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(chunkSize)
         header[8] = 'W'.code.toByte(); header[9] = 'A'.code.toByte(); header[10] =
-            'V'.code.toByte(); header[11] =
-            'E'.code.toByte()
+            'V'.code.toByte(); header[11] = 'E'.code.toByte()
         // fmt subchunk
         header[12] = 'f'.code.toByte(); header[13] = 'm'.code.toByte(); header[14] =
             't'.code.toByte(); header[15] = ' '.code.toByte()
@@ -200,8 +200,7 @@ object Utils {
     }
 
     fun concatAudioFilesToWav(
-        inputFiles: List<File>,
-        outputFile: File
+        inputFiles: List<File>, outputFile: File
     ) {
         require(inputFiles.isNotEmpty()) { "No input files" }
         val pcmStreams = mutableListOf<ByteArray>()

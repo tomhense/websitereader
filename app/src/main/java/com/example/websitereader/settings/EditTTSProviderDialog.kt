@@ -27,12 +27,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.websitereader.model.ExternalTTSProvider
 
 @Composable
 fun EditTTSProviderDialog(
-    entry: TTSProviderEntry?,
+    entry: ExternalTTSProvider?,
     onDismiss: () -> Unit,
-    onSave: (TTSProviderEntry) -> Unit
+    onSave: (ExternalTTSProvider) -> Unit
 ) {
     // Default values
     val defaultName = "OpenAI"
@@ -182,7 +183,7 @@ fun EditTTSProviderDialog(
         confirmButton = {
             Button(onClick = {
                 onSave(
-                    TTSProviderEntry(
+                    ExternalTTSProvider(
                         name = name,
                         apiBaseUrl = apiBaseUrl,
                         voiceName = voiceName,

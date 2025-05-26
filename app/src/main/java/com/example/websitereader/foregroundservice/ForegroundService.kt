@@ -11,7 +11,7 @@ import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.net.toUri
 import com.example.websitereader.R
-import com.example.websitereader.settings.TTSProviderEntryStorage
+import com.example.websitereader.settings.TTSProviderRepository
 import com.example.websitereader.tts.Android
 import com.example.websitereader.tts.OpenAI
 import com.example.websitereader.tts.ProgressState
@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
@@ -43,7 +44,7 @@ class ForegroundService : Service() {
     companion object {
         const val CHANNEL_ID = "my_channel_01"
         const val NOTIFICATION_ID = 1
-        const val EXTRA_PROVIDER_ENTRY = "PROVIDER_ENTRY"
+        const val EXTRA_PROVIDER_NAME = "PROVIDER_NAME"
         const val EXTRA_TEXT = "TEXT"
         const val EXTRA_LANG = "LANG"
         const val EXTRA_FILE_URI = "FILE_URI"
@@ -60,6 +61,7 @@ class ForegroundService : Service() {
             ForegroundNotificationHelper(this, CHANNEL_ID, "Foreground Service Channel")
     }
 
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // 1. Stop Action
         if (intent?.action == ACTION_STOP) {
@@ -70,13 +72,10 @@ class ForegroundService : Service() {
         }
 
         // 2. Parameters
-        val providerEntry = intent?.getStringExtra(
-            EXTRA_PROVIDER_ENTRY
-        )
+        val ttsProviderName = intent?.getStringExtra(EXTRA_PROVIDER_NAME)
         val text = intent?.getStringExtra(EXTRA_TEXT)
         val lang = intent?.getStringExtra(EXTRA_LANG)
         val fileUriString = intent?.getStringExtra(EXTRA_FILE_URI)
-
         if (text == null || lang == null || fileUriString == null) {
             stopSelf()
             return START_NOT_STICKY
@@ -93,7 +92,7 @@ class ForegroundService : Service() {
             this, 101, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 5. Initial Notification
+        // 5. Notification
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             stopSelf()
             return START_NOT_STICKY
@@ -104,20 +103,22 @@ class ForegroundService : Service() {
         startForeground(NOTIFICATION_ID, notificationBuilder.build())
         val notificationManager = NotificationManagerCompat.from(this)
 
-        // 6. TTS Provider
-        val providerInstance: Provider
-        if (providerEntry != null) {
-            val ttsProviderEntry = TTSProviderEntryStorage.fromJson(providerEntry)
-            providerInstance = OpenAI(this, ttsProviderEntry)
-        } else {
-            providerInstance = Android(this)
-        }
-
-        val outputFile = File(fileUriString.toUri().path!!)
-
-        // 7. Coroutine
+        // 6. Launch coroutine for the heavy work
         serviceScope.launch {
             try {
+                // Select provider
+                val providerInstance: Provider = if (ttsProviderName != null) {
+                    // Await the list, then find the matching provider
+                    val ttsProviders = TTSProviderRepository.load(this@ForegroundService).first()
+                    val entry = ttsProviders.find { it.name == ttsProviderName }
+                        ?: throw IllegalStateException("No provider found for $ttsProviderName")
+                    OpenAI(this@ForegroundService, entry)
+                } else {
+                    Android(this@ForegroundService)
+                }
+
+                val outputFile = File(fileUriString.toUri().path!!)
+
                 providerInstance.synthesizeTextToFile(
                     text = text,
                     langCode = lang,
@@ -130,8 +131,10 @@ class ForegroundService : Service() {
                         )
                         notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build())
                     })
+
                 ServiceBroadcastHelper.send(this@ForegroundService, BROADCAST_COMPLETE)
                 stopForeground(STOP_FOREGROUND_REMOVE)
+
             } catch (e: CancellationException) {
                 ServiceBroadcastHelper.send(this@ForegroundService, BROADCAST_FAILED)
                 Log.i("ForegroundService", "Cancelled by user or system, no error notification.")

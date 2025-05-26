@@ -14,7 +14,7 @@ class ShareReceiver : ComponentActivity() {
                 sharedUrl = (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain").let {
                     intent?.getStringExtra(Intent.EXTRA_TEXT) ?: ""
                 },
-                finishActivity = { finish() }
+                finishActivity = { finish() },
             )
         }
     }

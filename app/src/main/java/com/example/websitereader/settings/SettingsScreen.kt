@@ -22,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,21 +30,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.websitereader.model.ExternalTTSProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
-    val context = LocalContext.current
-
-    // Use an *immutable* list
-    var entries by remember {
-        mutableStateOf(
-            TTSProviderEntryStorage.load(context).toList()
-        )
-    }
+fun SettingsScreen(finishActivity: () -> Unit) {
+    //val viewModel: TTSProviderViewModel = viewModel()
+    val viewModel =
+        viewModel<TTSProviderViewModel>(viewModelStoreOwner = LocalContext.current as ViewModelStoreOwner)
+    val entries by viewModel.providers.collectAsState()
     var editingEntryIndex by remember { mutableStateOf<Int?>(null) }
     var showDialog by remember { mutableStateOf(false) }
-    var dialogEntry by remember { mutableStateOf<TTSProviderEntry?>(null) }
+    var dialogEntry by remember { mutableStateOf<ExternalTTSProvider?>(null) }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("TTS Providers") }) },
@@ -71,8 +71,7 @@ fun SettingsScreen() {
                         editingEntryIndex = idx
                     },
                     onDelete = {
-                        entries = entries.toList().toMutableList().apply { removeAt(idx) }.toList()
-                        TTSProviderEntryStorage.save(context, entries)
+                        viewModel.removeProvider(idx)
                     }
                 )
             }
@@ -81,13 +80,12 @@ fun SettingsScreen() {
             EditTTSProviderDialog(
                 entry = dialogEntry,
                 onDismiss = { showDialog = false },
-                onSave = { updated ->
-                    entries = if (editingEntryIndex != null) {
-                        entries.toMutableList().apply { set(editingEntryIndex!!, updated) }.toList()
+                onSave = { updated: ExternalTTSProvider ->
+                    if (editingEntryIndex != null) {
+                        viewModel.updateProvider(editingEntryIndex!!, updated)
                     } else {
-                        entries.toMutableList().apply { add(updated) }.toList()
+                        viewModel.addProvider(updated)
                     }
-                    TTSProviderEntryStorage.save(context, entries)
                     showDialog = false
                 }
             )
@@ -97,7 +95,7 @@ fun SettingsScreen() {
 
 @Composable
 fun TTSProviderEntryItem(
-    entry: TTSProviderEntry,
+    entry: ExternalTTSProvider,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {

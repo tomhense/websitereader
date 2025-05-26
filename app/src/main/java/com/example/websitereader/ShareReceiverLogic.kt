@@ -3,12 +3,12 @@ package com.example.websitereader
 import android.content.Context
 import android.net.Uri
 import com.example.websitereader.model.Article
-import com.example.websitereader.settings.TTSProviderEntry
+import com.example.websitereader.model.TTSProvider
 
 suspend fun processSharedUrlLogic(
     context: Context,
     url: String,
-    ttsProvider: TTSProviderEntry,
+    ttsProvider: TTSProvider,
     onAudioFileReady: (Uri) -> Unit,
     onError: (Throwable) -> Unit
 ) {
