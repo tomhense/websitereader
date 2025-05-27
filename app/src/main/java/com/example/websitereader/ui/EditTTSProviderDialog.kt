@@ -119,7 +119,6 @@ fun EditTTSProviderDialog(
     }
 
     var formatMenuExpanded by remember { mutableStateOf(false) }
-    var voicesMenuExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
