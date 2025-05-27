@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat.startActivity
+import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.example.websitereader.PreviewArticle
 import com.example.websitereader.R
@@ -62,14 +63,31 @@ import com.example.websitereader.audioplayer.AudioPlayer
 import com.example.websitereader.foregroundservice.AudioGenerationServiceConnector
 import com.example.websitereader.foregroundservice.ForegroundService
 import com.example.websitereader.model.Article
+import com.example.websitereader.model.ExternalTTSProvider
+import com.example.websitereader.model.SystemTTSProvider
 import com.example.websitereader.model.TTSProvider
 import com.example.websitereader.settings.TTSProviderStore
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 
 private fun copyFile(context: Context, sourceUri: Uri, destUri: Uri) {
     try {
-        context.contentResolver.openInputStream(sourceUri)?.use { inputStream ->
-            context.contentResolver.openOutputStream(destUri)?.use { outputStream ->
-                inputStream.copyTo(outputStream)
+        val inputStream = when (sourceUri.scheme) {
+            "content" -> context.contentResolver.openInputStream(sourceUri)
+            "file" -> FileInputStream(File(sourceUri.path!!))
+            else -> throw IllegalArgumentException("Unknown URI scheme: ${sourceUri.scheme}")
+        }
+
+        val outputStream = when (destUri.scheme) {
+            "content" -> context.contentResolver.openOutputStream(destUri)
+            "file" -> FileOutputStream(File(destUri.path!!))
+            else -> throw IllegalArgumentException("Unknown URI scheme: ${destUri.scheme}")
+        }
+
+        inputStream.use { inp ->
+            outputStream.use { outp ->
+                inp!!.copyTo(outp!!)
             }
         }
         Toast.makeText(context, "File copied successfully!", Toast.LENGTH_SHORT).show()
@@ -87,10 +105,12 @@ private fun shareFile(context: Context, uri: Uri) {
         "mp3" -> "audio/mpeg"
         else -> "audio/*"
     }
+    val contentUri =
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", File(uri.path!!))
 
     val shareIntent = Intent(Intent.ACTION_SEND).apply {
         type = fileType
-        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_STREAM, contentUri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     val chooser = Intent.createChooser(shareIntent, null)
@@ -111,17 +131,19 @@ fun ShareReceiverScreen(
     val ttsProviderList: List<TTSProvider> by remember {
         mutableStateOf(
             listOf(
-                com.example.websitereader.model.SystemTTSProvider
+                SystemTTSProvider
             ) + externalTTSProviderList
         )
     }
     var selectedTTSProviderIndex by remember { mutableStateOf<Int?>(0) }
+    var selectedTTSProvider by remember { mutableStateOf<TTSProvider?>(null) }
 
     var isGenerating by remember { mutableStateOf(false) }
     var outputFile by remember { mutableStateOf<Uri?>(null) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
     var article by remember { mutableStateOf<Article?>(null) }
+    var cost by remember { mutableStateOf<Double?>(null) }
 
     val supportedLanguages by remember { mutableStateOf(listOf("en-US", "de-DE")) }
     var selectedLanguageIndex by remember { mutableStateOf<Int?>(0) }
@@ -141,7 +163,7 @@ fun ShareReceiverScreen(
             onSucceeded = { result ->
                 progress = 0f
                 isGenerating = false
-                outputFile = result.toUri()
+                outputFile = File(result).toUri()
             },
             onError = { error ->
                 progress = 0f
@@ -187,6 +209,12 @@ fun ShareReceiverScreen(
         article = Article.fromUrl(urlToProcess)
     }
 
+    // Whenever selected tts provider index changes
+    LaunchedEffect(selectedTTSProviderIndex) {
+        selectedTTSProvider = selectedTTSProviderIndex?.let { idx -> ttsProviderList[idx] }
+    }
+
+
     // Whenever article changes, reset the language index
     LaunchedEffect(article) {
         if (article != null && article!!.lang != null) {
@@ -195,6 +223,19 @@ fun ShareReceiverScreen(
             }
         } else {
             selectedLanguageIndex = 0
+        }
+    }
+
+    // Whenever selected tts provider or the article changes, recalculate the cost
+    LaunchedEffect(selectedTTSProvider, article) {
+        cost = if (article == null) {
+            0.0
+        } else {
+            if (selectedTTSProvider is ExternalTTSProvider) {
+                article!!.text.length * ((selectedTTSProvider as ExternalTTSProvider).pricePer1MCharacters / 1000000.0)
+            } else {
+                0.0
+            }
         }
     }
 
@@ -227,9 +268,7 @@ fun ShareReceiverScreen(
                             urlError = "Invalid URL"
                             return@FloatingActionButton
                         }
-                        val ttsProvider =
-                            selectedTTSProviderIndex?.let { idx -> ttsProviderList[idx] }
-                        if (ttsProvider == null) {
+                        if (selectedTTSProvider == null) {
                             errorMsg = "No TTS provider selected"
                             return@FloatingActionButton
                         }
@@ -243,12 +282,13 @@ fun ShareReceiverScreen(
                         val intent = Intent(context, ForegroundService::class.java)
                         intent.putExtra(ForegroundService.EXTRA_ARTICLE, article!!.toJson())
                         intent.putExtra(
-                            ForegroundService.EXTRA_PROVIDER_NAME, when (ttsProvider) {
-                                is com.example.websitereader.model.SystemTTSProvider -> context.getString(
+                            ForegroundService.EXTRA_PROVIDER_NAME, when (selectedTTSProvider) {
+                                is SystemTTSProvider -> context.getString(
                                     R.string.system_tts_provider_name
                                 )
 
-                                is com.example.websitereader.model.ExternalTTSProvider -> ttsProvider.name
+                                is ExternalTTSProvider -> (selectedTTSProvider as ExternalTTSProvider).name
+                                null -> TODO()
                             }
                         )
                         context.startForegroundService(intent)
@@ -294,131 +334,135 @@ fun ShareReceiverScreen(
                     KeyValueRow("Detected Language", article!!.lang ?: "Unknown")
                     KeyValueRow("Words", article!!.text.split(Regex("\\s+")).size.toString())
                     KeyValueRow("Characters", article!!.text.length.toString())
+                    KeyValueRow("Reading Time", "~${article!!.readingTimeInSecs / 60} min")
+                    KeyValueRow("Cost", "%.3f $".format(cost))
                 }
-            }
 
-            if (urlError != null) {
-                Text(
-                    text = urlError!!,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
+                if (urlError != null) {
+                    Text(
+                        text = urlError!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
 
-            Spacer(Modifier.height(24.dp))
-            if (article != null) {
-                Text("Choose TTS Provider:", style = MaterialTheme.typography.bodyLarge)
-                LazyColumn {
-                    itemsIndexed(ttsProviderList) { idx, provider ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedTTSProviderIndex = idx },
-                            verticalAlignment = Alignment.CenterVertically
+                Spacer(Modifier.height(24.dp))
+                if (article != null) {
+                    Text("Choose TTS Provider:", style = MaterialTheme.typography.bodyLarge)
+                    LazyColumn {
+                        itemsIndexed(ttsProviderList) { idx, provider ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedTTSProviderIndex = idx },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = selectedTTSProviderIndex == idx,
+                                    enabled = !isGenerating,
+                                    onClick = { selectedTTSProviderIndex = idx })
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    when (provider) {
+                                        is SystemTTSProvider -> context.getString(
+                                            R.string.system_tts_provider_name
+                                        )
+
+                                        is ExternalTTSProvider -> provider.name
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Text("Choose Language:", style = MaterialTheme.typography.bodyLarge)
+                    LazyColumn {
+                        itemsIndexed(supportedLanguages) { idx, lang ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        article!!.lang = lang
+                                        selectedLanguageIndex = idx
+                                    }, verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = selectedLanguageIndex == idx,
+                                    enabled = !isGenerating,
+                                    onClick = {
+                                        article!!.lang = lang; selectedLanguageIndex = idx
+                                    })
+                                Spacer(Modifier.width(12.dp))
+                                Text(lang)
+                            }
+                        }
+                    }
+
+                    if (isGenerating || article == null) {
+                        Box(
+                            Modifier.fillMaxWidth(), contentAlignment = Alignment.Center
                         ) {
-                            RadioButton(
-                                selected = selectedTTSProviderIndex == idx,
-                                enabled = !isGenerating,
-                                onClick = { selectedTTSProviderIndex = idx })
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                when (provider) {
-                                    is com.example.websitereader.model.SystemTTSProvider -> context.getString(
-                                        R.string.system_tts_provider_name
-                                    )
-
-                                    is com.example.websitereader.model.ExternalTTSProvider -> provider.name
-                                }
+                            CircularProgressIndicator(
+                                progress = { if (isGenerating) progress else 0.0f },
+                                modifier = Modifier.padding(16.dp),
                             )
                         }
                     }
-                }
 
-                Spacer(Modifier.height(16.dp))
-
-                Text("Choose Language:", style = MaterialTheme.typography.bodyLarge)
-                LazyColumn {
-                    itemsIndexed(supportedLanguages) { idx, lang ->
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    article!!.lang = lang
-                                    selectedLanguageIndex = idx
-                                }, verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selectedLanguageIndex == idx,
-                                enabled = !isGenerating,
-                                onClick = { article!!.lang = lang; selectedLanguageIndex = idx })
-                            Spacer(Modifier.width(12.dp))
-                            Text(lang)
-                        }
+                    if (errorMsg != null) {
+                        Spacer(Modifier.height(16.dp))
+                        Text(errorMsg!!, color = MaterialTheme.colorScheme.error)
                     }
-                }
 
-                if (isGenerating || article == null) {
-                    Box(
-                        Modifier.fillMaxWidth(), contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            progress = { if (isGenerating) progress else 0.0f },
-                            modifier = Modifier.padding(16.dp),
+                    if (!isGenerating && outputFile != null) {
+                        Card(
+                            modifier = Modifier.padding(8.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Row {
+                                Text(
+                                    outputFile!!.lastPathSegment ?: "output.wav",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    modifier = Modifier
+                                        .padding(16.dp)
+                                        .weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                IconButton(onClick = {
+                                    val outputBaseFileName =
+                                        outputFile!!.lastPathSegment ?: "output.wav"
+                                    fileLauncher.launch(outputBaseFileName)
+                                }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.baseline_save_24),
+                                        contentDescription = stringResource(id = R.string.share_receiver_save_file_button),
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .padding(8.dp)
+                                    )
+                                }
+                                IconButton(onClick = {
+                                    shareFile(context, outputFile!!)
+                                }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.baseline_share_24),
+                                        contentDescription = "Share",
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .padding(8.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        AudioPlayerCard(
+                            audioPlayer, outputFile!!, modifier = Modifier.padding(top = 16.dp)
                         )
                     }
-                }
-
-                if (errorMsg != null) {
-                    Spacer(Modifier.height(16.dp))
-                    Text(errorMsg!!, color = MaterialTheme.colorScheme.error)
-                }
-
-                if (!isGenerating && outputFile != null) {
-                    Card(
-                        modifier = Modifier.padding(8.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                    ) {
-                        Row {
-                            Text(
-                                outputFile!!.lastPathSegment ?: "output.wav",
-                                style = MaterialTheme.typography.labelLarge,
-                                modifier = Modifier
-                                    .padding(16.dp)
-                                    .weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            IconButton(onClick = {
-                                val outputBaseFileName =
-                                    outputFile!!.lastPathSegment ?: "output.wav"
-                                fileLauncher.launch(outputBaseFileName)
-                            }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.baseline_save_24),
-                                    contentDescription = stringResource(id = R.string.share_receiver_save_file_button),
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .padding(8.dp)
-                                )
-                            }
-                            IconButton(onClick = {
-                                shareFile(context, outputFile!!)
-                            }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.baseline_share_24),
-                                    contentDescription = "Share",
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .padding(8.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    AudioPlayerCard(
-                        audioPlayer, outputFile!!, modifier = Modifier.padding(top = 16.dp)
-                    )
                 }
             }
         }

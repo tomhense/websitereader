@@ -121,7 +121,7 @@ class ForegroundService : Service() {
                     Regex("[^a-zA-Z0-9]"),
                     "_"
                 ) + "." + providerInstance.audioFormat
-                val outputFile = this@ForegroundService.filesDir.resolve(fileName)
+                val outputFile = this@ForegroundService.cacheDir.resolve(fileName)
 
                 providerInstance.synthesizeTextToFile(
                     text = article.text,

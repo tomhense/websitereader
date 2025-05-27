@@ -12,13 +12,16 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
 
+const val READING_SPEED_WPM = 155 // Average (spoken) reading speed in WPM
+
 @Serializable
 class Article(
     val url: String,
     var lang: String?,
     val headline: String,
     val text: String,
-    val wholeText: String
+    val wholeText: String,
+    val readingTimeInSecs: Int
 ) {
 
     companion object {
@@ -47,8 +50,11 @@ class Article(
 
                     val headline = article.title ?: soup.title()
 
-                    if (articleText != null && headline != null && wholeText != null) {
-                        Article(url, lang, headline, articleText, wholeText)
+                    val readingTimeInSecs =
+                        (wholeText?.split(Regex("\\s+"))?.size!!) / READING_SPEED_WPM * 60
+
+                    if (articleText != null && headline != null) {
+                        Article(url, lang, headline, articleText, wholeText, readingTimeInSecs)
                     } else {
                         null
                     }
@@ -89,7 +95,7 @@ object ArticleUtils {
         val langAttr = htmlElement.attr("lang").takeIf { it.isNotBlank() } ?: return null
 
         return when {
-            Regex("^[a-z]{2}-[A-Z]{2}$").matches(langAttr) -> langAttr
+            Regex("^[A-Za-z]{2}-[A-Za-z]{2}$").matches(langAttr) -> langAttr
             else -> {
                 val langMappings = mapOf(
                     "en" to "en-US",
