@@ -14,13 +14,13 @@ import androidx.compose.ui.unit.dp
 fun PreviewArticleScreen(headline: String, content: String) {
     Column(
         modifier = Modifier
-            .padding(16.dp)
+            .padding(vertical = 48.dp, horizontal = 16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Text(headline, style = MaterialTheme.typography.headlineMedium)
+        Text(headline, style = MaterialTheme.typography.headlineSmall)
         Text(
             content,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(top = 8.dp, bottom = 512.dp)
         )
     }

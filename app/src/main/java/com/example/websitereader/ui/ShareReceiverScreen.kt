@@ -123,6 +123,9 @@ fun ShareReceiverScreen(
 
     var article by remember { mutableStateOf<Article?>(null) }
 
+    val supportedLanguages by remember { mutableStateOf(listOf("en-US", "de-DE")) }
+    var selectedLanguageIndex by remember { mutableStateOf<Int?>(0) }
+
     // Progress state
     var progress by remember { mutableFloatStateOf(0f) }
     var isBound by remember { mutableStateOf(false) }
@@ -182,6 +185,17 @@ fun ShareReceiverScreen(
     LaunchedEffect(urlToProcess) {
         article = null // Clear previous article, so the spinner shows
         article = Article.fromUrl(urlToProcess)
+    }
+
+    // Whenever article changes, reset the language index
+    LaunchedEffect(article) {
+        if (article != null && article!!.lang != null) {
+            supportedLanguages.find { it == article!!.lang }?.let {
+                selectedLanguageIndex = supportedLanguages.indexOf(it)
+            }
+        } else {
+            selectedLanguageIndex = 0
+        }
     }
 
     Scaffold(topBar = {
@@ -284,9 +298,9 @@ fun ShareReceiverScreen(
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedTTSProviderIndex = idx }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
+                                .clickable { selectedTTSProviderIndex = idx },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             RadioButton(
                                 selected = selectedTTSProviderIndex == idx,
                                 enabled = !isGenerating,
@@ -304,69 +318,93 @@ fun ShareReceiverScreen(
                         }
                     }
                 }
-            }
 
-            if (isGenerating || article == null) {
-                Box(
-                    Modifier.fillMaxWidth(), contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        progress = { if (isGenerating) progress else 0.0f },
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
-            }
-
-            if (errorMsg != null) {
                 Spacer(Modifier.height(16.dp))
-                Text(errorMsg!!, color = MaterialTheme.colorScheme.error)
-            }
 
-            if (!isGenerating && outputFile != null) {
-                Card(
-                    modifier = Modifier.padding(8.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                ) {
-                    Row {
-                        Text(
-                            outputFile!!.lastPathSegment ?: "output.wav",
-                            style = MaterialTheme.typography.labelLarge,
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        IconButton(onClick = {
-                            val outputBaseFileName = outputFile!!.lastPathSegment ?: "output.wav"
-                            fileLauncher.launch(outputBaseFileName)
-                        }) {
-                            Icon(
-                                painter = painterResource(R.drawable.baseline_save_24),
-                                contentDescription = stringResource(id = R.string.share_receiver_save_file_button),
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .padding(8.dp)
-                            )
-                        }
-                        IconButton(onClick = {
-                            shareFile(context, outputFile!!)
-                        }) {
-                            Icon(
-                                painter = painterResource(R.drawable.baseline_share_24),
-                                contentDescription = "Share",
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .padding(8.dp)
-                            )
+                Text("Choose Language:", style = MaterialTheme.typography.bodyLarge)
+                LazyColumn {
+                    itemsIndexed(supportedLanguages) { idx, lang ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    article!!.lang = lang
+                                    selectedLanguageIndex = idx
+                                }, verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = selectedLanguageIndex == idx,
+                                enabled = !isGenerating,
+                                onClick = { article!!.lang = lang; selectedLanguageIndex = idx })
+                            Spacer(Modifier.width(12.dp))
+                            Text(lang)
                         }
                     }
                 }
 
-                AudioPlayerCard(
-                    audioPlayer, outputFile!!, modifier = Modifier.padding(top = 16.dp)
-                )
+                if (isGenerating || article == null) {
+                    Box(
+                        Modifier.fillMaxWidth(), contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            progress = { if (isGenerating) progress else 0.0f },
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    }
+                }
+
+                if (errorMsg != null) {
+                    Spacer(Modifier.height(16.dp))
+                    Text(errorMsg!!, color = MaterialTheme.colorScheme.error)
+                }
+
+                if (!isGenerating && outputFile != null) {
+                    Card(
+                        modifier = Modifier.padding(8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Row {
+                            Text(
+                                outputFile!!.lastPathSegment ?: "output.wav",
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            IconButton(onClick = {
+                                val outputBaseFileName =
+                                    outputFile!!.lastPathSegment ?: "output.wav"
+                                fileLauncher.launch(outputBaseFileName)
+                            }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.baseline_save_24),
+                                    contentDescription = stringResource(id = R.string.share_receiver_save_file_button),
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .padding(8.dp)
+                                )
+                            }
+                            IconButton(onClick = {
+                                shareFile(context, outputFile!!)
+                            }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.baseline_share_24),
+                                    contentDescription = "Share",
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .padding(8.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    AudioPlayerCard(
+                        audioPlayer, outputFile!!, modifier = Modifier.padding(top = 16.dp)
+                    )
+                }
             }
         }
     }
