@@ -19,6 +19,7 @@ import kotlin.random.Random
 
 class Android(private val context: Context) : TextToSpeech.OnInitListener, Provider {
     override val isReady = CompletableDeferred<Unit>()
+    override val audioFormat = "wav"
 
     private val textToSpeech = TextToSpeech(context, this)
 

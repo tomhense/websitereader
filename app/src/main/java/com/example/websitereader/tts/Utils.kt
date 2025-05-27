@@ -83,7 +83,8 @@ object Utils {
         val pcmEncoding: Int   // e.g. AudioFormat.ENCODING_PCM_16BIT
     )
 
-    fun decodeToPcmBytes(audioFile: File): Pair<ByteArray, WavSpec> {
+
+    private fun decodeToPcmBytes(audioFile: File): Pair<ByteArray, WavSpec> {
         val extractor = MediaExtractor()
         extractor.setDataSource(audioFile.absolutePath)
         var trackIndex = -1
@@ -110,12 +111,8 @@ object Utils {
         // We'll output 16-bit PCM
         val pcmEncoding = AudioFormat.ENCODING_PCM_16BIT
 
-        // Prepare buffers
         val output = ByteArrayOutputStream()
-        val inputBuffers = codec.inputBuffers
-        val outputBuffers = codec.outputBuffers
         val bufferInfo = MediaCodec.BufferInfo()
-
         var sawInputEOS = false
         var sawOutputEOS = false
 
@@ -123,7 +120,7 @@ object Utils {
             if (!sawInputEOS) {
                 val inputBufIdx = codec.dequeueInputBuffer(10000)
                 if (inputBufIdx >= 0) {
-                    val inputBuf = inputBuffers[inputBufIdx]
+                    val inputBuf = codec.getInputBuffer(inputBufIdx)!!
                     val sampleSize = extractor.readSampleData(inputBuf, 0)
                     if (sampleSize < 0) {
                         codec.queueInputBuffer(
@@ -137,13 +134,14 @@ object Utils {
                     }
                 }
             }
+
             val outputBufIdx = codec.dequeueOutputBuffer(bufferInfo, 10000)
             when {
                 outputBufIdx >= 0 -> {
-                    val outBuf = outputBuffers[outputBufIdx]
-                    val chunk = ByteArray(bufferInfo.size)
+                    val outBuf = codec.getOutputBuffer(outputBufIdx)!!
                     outBuf.position(bufferInfo.offset)
                     outBuf.limit(bufferInfo.offset + bufferInfo.size)
+                    val chunk = ByteArray(bufferInfo.size)
                     outBuf.get(chunk)
                     output.write(chunk)
                     codec.releaseOutputBuffer(outputBufIdx, false)
@@ -153,7 +151,11 @@ object Utils {
                 }
 
                 outputBufIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    // You can check format consistency here if needed
+                    // handle format change if needed
+                }
+
+                outputBufIdx == MediaCodec.INFO_TRY_AGAIN_LATER -> {
+                    // no available buffer, just skip for now
                 }
             }
         }
@@ -164,7 +166,7 @@ object Utils {
         return output.toByteArray() to wavSpec
     }
 
-    fun makePcmWavHeader(
+    private fun makePcmWavHeader(
         totalDataLen: Int, numChannels: Int, sampleRate: Int, bitsPerSample: Int
     ): ByteArray {
         val header = ByteArray(44)
@@ -172,14 +174,14 @@ object Utils {
         val blockAlign = numChannels * bitsPerSample / 8
         val chunkSize = 36 + totalDataLen
         // RIFF header
-        header[0] = 'R'.toByte(); header[1] = 'I'.toByte(); header[2] = 'F'.toByte(); header[3] =
-            'F'.toByte()
+        header[0] = 'R'.code.toByte(); header[1] = 'I'.code.toByte(); header[2] =
+            'F'.code.toByte(); header[3] = 'F'.code.toByte()
         ByteBuffer.wrap(header, 4, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(chunkSize)
-        header[8] = 'W'.toByte(); header[9] = 'A'.toByte(); header[10] = 'V'.toByte(); header[11] =
-            'E'.toByte()
+        header[8] = 'W'.code.toByte(); header[9] = 'A'.code.toByte(); header[10] =
+            'V'.code.toByte(); header[11] = 'E'.code.toByte()
         // fmt subchunk
-        header[12] = 'f'.toByte(); header[13] = 'm'.toByte(); header[14] =
-            't'.toByte(); header[15] = ' '.toByte()
+        header[12] = 'f'.code.toByte(); header[13] = 'm'.code.toByte(); header[14] =
+            't'.code.toByte(); header[15] = ' '.code.toByte()
         ByteBuffer.wrap(header, 16, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(16) // PCM
         ByteBuffer.wrap(header, 20, 2).order(ByteOrder.LITTLE_ENDIAN)
             .putShort(1) // Audio format = PCM
@@ -191,21 +193,19 @@ object Utils {
         ByteBuffer.wrap(header, 34, 2).order(ByteOrder.LITTLE_ENDIAN)
             .putShort(bitsPerSample.toShort())
         // data subchunk
-        header[36] = 'd'.toByte(); header[37] = 'a'.toByte(); header[38] =
-            't'.toByte(); header[39] = 'a'.toByte()
+        header[36] = 'd'.code.toByte(); header[37] = 'a'.code.toByte(); header[38] =
+            't'.code.toByte(); header[39] = 'a'.code.toByte()
         ByteBuffer.wrap(header, 40, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(totalDataLen)
         return header
     }
 
     fun concatAudioFilesToWav(
-        inputFiles: List<File>,
-        outputFile: File,
-        templateWavHeader: ByteArray = ByteArray(44) // Standard PCM WAV header size
+        inputFiles: List<File>, outputFile: File
     ) {
         require(inputFiles.isNotEmpty()) { "No input files" }
         val pcmStreams = mutableListOf<ByteArray>()
         var wavSpec: WavSpec? = null
-        for ((i, file) in inputFiles.withIndex()) {
+        for (file in inputFiles) {
             val (pcm, spec) = decodeToPcmBytes(file)
             if (wavSpec == null) {
                 wavSpec = spec
@@ -239,7 +239,7 @@ object Utils {
     data class WavInfo(val headerBytes: ByteArray, val dataStart: Int, val dataLen: Int)
 
     // Extend ByteArray with a function to find a slice
-    fun ByteArray.indexOfSlice(slice: ByteArray): Int {
+    private fun ByteArray.indexOfSlice(slice: ByteArray): Int {
         outer@ for (i in 0..this.size - slice.size) {
             for (j in slice.indices) {
                 if (this[i + j] != slice[j]) continue@outer
@@ -256,7 +256,7 @@ object Utils {
         val dataIdx = bytes.indexOfSlice("data".toByteArray())
         require(dataIdx >= 0)
         val reportedDataLen =
-            ByteBuffer.wrap(bytes, dataIdx + 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).int
+            ByteBuffer.wrap(bytes, dataIdx + 4, 4).order(ByteOrder.LITTLE_ENDIAN).int
         val dataStart = dataIdx + 8
 
         // If dataLen is 0xFFFFFFFF or exceeds file size, fallback
@@ -269,13 +269,13 @@ object Utils {
     }
 
     // Writes a standard PCM WAV header
-    fun makeWavHeader(totalDataLen: Int, templateHeader: ByteArray): ByteArray {
+    private fun makeWavHeader(totalDataLen: Int, templateHeader: ByteArray): ByteArray {
         val newHeader = templateHeader.copyOf()
         // Chunk size at offset 4 (4 bytes, little-endian)
         val chunkSize = totalDataLen + newHeader.size - 8
-        ByteBuffer.wrap(newHeader, 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).putInt(chunkSize)
+        ByteBuffer.wrap(newHeader, 4, 4).order(ByteOrder.LITTLE_ENDIAN).putInt(chunkSize)
         // Subchunk2 size (data len) at offset newHeader.size-4 (typically)
-        ByteBuffer.wrap(newHeader, newHeader.size - 4, 4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        ByteBuffer.wrap(newHeader, newHeader.size - 4, 4).order(ByteOrder.LITTLE_ENDIAN)
             .putInt(totalDataLen)
         return newHeader
     }

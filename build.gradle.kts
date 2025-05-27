@@ -4,4 +4,5 @@ plugins {
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
     kotlin("jvm") version "2.1.20"
+    id("com.autonomousapps.dependency-analysis") version "2.17.0"
 }

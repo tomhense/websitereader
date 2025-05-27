@@ -10,6 +10,7 @@ enum class ProgressState(val value: Int) {
 
 interface Provider {
     val isReady: CompletableDeferred<Unit>
+    val audioFormat: String
 
     suspend fun synthesizeTextToFile(
         text: String,

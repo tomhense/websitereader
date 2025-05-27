@@ -5,7 +5,7 @@ import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
-import com.example.websitereader.settings.TTSProviderEntry
+import com.example.websitereader.model.ExternalTTSProvider
 import com.example.websitereader.tts.Utils.concatAudioFilesToWav
 import com.example.websitereader.tts.Utils.concatWaveFiles
 import com.example.websitereader.tts.Utils.splitTextIntoLongChunks
@@ -26,14 +26,14 @@ import java.io.FileOutputStream
 import java.io.IOException
 
 class OpenAI(
-    private val context: Context, ttsProviderEntry: TTSProviderEntry
+    private val context: Context, ttsProviderEntry: ExternalTTSProvider
 ) : Provider {
     override val isReady = CompletableDeferred<Unit>()
     private val baseUrl = ttsProviderEntry.apiBaseUrl
     private val apiKey = ttsProviderEntry.apiKey
     private val maxChunkLength = ttsProviderEntry.maxChunkLength
     private val voiceName = ttsProviderEntry.voiceName
-    private val audioFormat = ttsProviderEntry.audioFormat
+    override val audioFormat = ttsProviderEntry.audioFormat
     private val modelName = ttsProviderEntry.modelName
     private val asyncSynthesization = ttsProviderEntry.asyncSynthesization
 

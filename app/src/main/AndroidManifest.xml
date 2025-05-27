@@ -71,7 +71,7 @@
         </provider>
 
         <service
-            android:name=".PlaybackService"
+            android:name=".audioplayer.PlaybackService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>

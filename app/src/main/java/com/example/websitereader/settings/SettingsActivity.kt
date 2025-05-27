@@ -1,14 +1,16 @@
 package com.example.websitereader.settings
 
 import android.os.Bundle
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import com.example.websitereader.ui.SettingsScreen
 
-class SettingsActivity : AppCompatActivity() {
+class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        supportFragmentManager
-            .beginTransaction()
-            .replace(android.R.id.content, SettingsFragment())
-            .commit()
+        TTSProviderStore.load(this)
+        setContent {
+            SettingsScreen(finishActivity = { finish() })
+        }
     }
 }
