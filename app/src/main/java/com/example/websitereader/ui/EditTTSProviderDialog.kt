@@ -14,6 +14,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -29,11 +31,53 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.websitereader.model.ExternalTTSProvider
 
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun VoiceSelector(
+    value: String,
+    onValueChange: (String) -> Unit,
+    defaultVoices: List<String>,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier.fillMaxWidth()
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            label = { Text("Voice Name") },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+            trailingIcon = {
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose voice")
+                }
+            },
+            singleLine = true,
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            defaultVoices.forEach { voice ->
+                DropdownMenuItem(text = { Text(voice) }, onClick = {
+                    onValueChange(voice)
+                    expanded = false
+                })
+            }
+        }
+    }
+}
+
 @Composable
 fun EditTTSProviderDialog(
-    entry: ExternalTTSProvider?,
-    onDismiss: () -> Unit,
-    onSave: (ExternalTTSProvider) -> Unit
+    entry: ExternalTTSProvider?, onDismiss: () -> Unit, onSave: (ExternalTTSProvider) -> Unit
 ) {
     // Default values
     val defaultName = "OpenAI"
@@ -94,31 +138,12 @@ fun EditTTSProviderDialog(
                     label = { Text("API Base URL") },
                     modifier = Modifier.fillMaxWidth()
                 )
-                Box(Modifier.fillMaxWidth()) {
-                    OutlinedTextField(
-                        readOnly = true,
-                        value = voiceName,
-                        onValueChange = {},
-                        label = { Text("Voice Name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = {
-                            IconButton(onClick = { voicesMenuExpanded = true }) {
-                                Icon(
-                                    Icons.Default.ArrowDropDown, contentDescription = "Choose voice"
-                                )
-                            }
-                        })
-                    DropdownMenu(
-                        expanded = voicesMenuExpanded,
-                        onDismissRequest = { voicesMenuExpanded = false }) {
-                        for (voice in defaultVoices) {
-                            DropdownMenuItem(onClick = {
-                                voiceName = voice
-                                voicesMenuExpanded = false
-                            }, text = { Text(voice) })
-                        }
-                    }
-                }
+                VoiceSelector(
+                    defaultVoices = defaultVoices,
+                    value = voiceName,
+                    onValueChange = { voiceName = it },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 OutlinedTextField(
                     value = pricePer1M,
                     onValueChange = { pricePer1M = it },
