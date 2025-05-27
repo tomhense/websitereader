@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import com.example.websitereader.settings.SettingsActivity
 import com.example.websitereader.ui.MainScreen
 
 class MainActivity : ComponentActivity() {
