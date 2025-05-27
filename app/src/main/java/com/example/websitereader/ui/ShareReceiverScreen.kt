@@ -100,7 +100,7 @@ private fun shareFile(context: Context, uri: Uri) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShareReceiverScreen(
-    sharedUrl: String, finishActivity: () -> Unit,
+    sharedUrl: String,
 ) {
     val context = LocalContext.current
 
@@ -221,37 +221,52 @@ fun ShareReceiverScreen(
             }
             FloatingActionButton(
                 onClick = {
-                    // Input validation
-                    if (!Patterns.WEB_URL.matcher(urlToProcess).matches()) {
-                        urlError = "Invalid URL"
-                        return@FloatingActionButton
-                    }
-                    val ttsProvider = selectedTTSProviderIndex?.let { idx -> ttsProviderList[idx] }
-                    if (ttsProvider == null) {
-                        errorMsg = "No TTS provider selected"
-                        return@FloatingActionButton
-                    }
-                    if (article == null) {
-                        return@FloatingActionButton
-                    }
-
-                    isGenerating = true
-                    errorMsg = null
-
-                    val intent = Intent(context, ForegroundService::class.java)
-                    intent.putExtra(ForegroundService.EXTRA_ARTICLE, article!!.toJson())
-                    intent.putExtra(
-                        ForegroundService.EXTRA_PROVIDER_NAME, when (ttsProvider) {
-                            is com.example.websitereader.model.SystemTTSProvider -> context.getString(
-                                R.string.system_tts_provider_name
-                            )
-
-                            is com.example.websitereader.model.ExternalTTSProvider -> ttsProvider.name
+                    if (!isGenerating) {
+                        // Input validation
+                        if (!Patterns.WEB_URL.matcher(urlToProcess).matches()) {
+                            urlError = "Invalid URL"
+                            return@FloatingActionButton
                         }
-                    )
-                    context.startForegroundService(intent)
+                        val ttsProvider =
+                            selectedTTSProviderIndex?.let { idx -> ttsProviderList[idx] }
+                        if (ttsProvider == null) {
+                            errorMsg = "No TTS provider selected"
+                            return@FloatingActionButton
+                        }
+                        if (article == null) {
+                            return@FloatingActionButton
+                        }
+
+                        isGenerating = true
+                        errorMsg = null
+
+                        val intent = Intent(context, ForegroundService::class.java)
+                        intent.putExtra(ForegroundService.EXTRA_ARTICLE, article!!.toJson())
+                        intent.putExtra(
+                            ForegroundService.EXTRA_PROVIDER_NAME, when (ttsProvider) {
+                                is com.example.websitereader.model.SystemTTSProvider -> context.getString(
+                                    R.string.system_tts_provider_name
+                                )
+
+                                is com.example.websitereader.model.ExternalTTSProvider -> ttsProvider.name
+                            }
+                        )
+                        context.startForegroundService(intent)
+                    } else {
+                        // Stop the generation
+                        val intent = Intent(context, ForegroundService::class.java)
+                        intent.action = ForegroundService.ACTION_STOP
+                        context.startForegroundService(intent)
+                    }
                 }) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send/Generate")
+                if (isGenerating) {
+                    Icon(
+                        painter = painterResource(R.drawable.baseline_stop_24),
+                        contentDescription = "Stp["
+                    )
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Generate")
+                }
             }
         }
     }) { padding ->
@@ -413,5 +428,5 @@ fun ShareReceiverScreen(
 @Preview
 @Composable
 fun ShareReceiverScreenPreview() {
-    ShareReceiverScreen(sharedUrl = "https://example.com", finishActivity = {})
+    ShareReceiverScreen(sharedUrl = "https://example.com")
 }
