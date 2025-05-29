@@ -70,6 +70,7 @@ dependencies {
     implementation(libs.androidx.core)
     implementation(libs.androidx.localbroadcastmanager)
     implementation(libs.androidx.media3.common)
+    implementation(libs.datastore.preferences)
     implementation(libs.guava)
     implementation(libs.kotlinx.serialization.core)
     testImplementation(libs.junit)

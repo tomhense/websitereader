@@ -3,6 +3,7 @@ agp = "8.10.1"
 annotation = "1.8.1"
 appcompatVersion = "1.4.0"
 core = "1.13.0"
+datastorePreferences = "1.1.7"
 foundation = "1.6.6"
 foundationLayout = "1.6.6"
 guava = "33.3.1-android"
@@ -60,6 +61,7 @@ androidx-preference-ktx = { module = "androidx.preference:preference-ktx" }
 androidx-runtime = { module = "androidx.compose.runtime:runtime", version.ref = "runtime" }
 androidx-ui-text = { module = "androidx.compose.ui:ui-text", version.ref = "uiText" }
 androidx-ui-unit = { module = "androidx.compose.ui:ui-unit", version.ref = "uiUnit" }
+datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastorePreferences" }
 google-material = { module = "com.google.android.material:material" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
