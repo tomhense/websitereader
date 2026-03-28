@@ -6,8 +6,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.annotation.RequiresApi
 import com.example.websitereader.model.ExternalTTSProvider
-import com.example.websitereader.tts.Utils.concatAudioFilesToWav
-import com.example.websitereader.tts.Utils.concatWaveFiles
+import com.example.websitereader.tts.Utils.concatAudioFiles
 import com.example.websitereader.tts.Utils.splitTextIntoLongChunks
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -78,23 +77,7 @@ class OpenAI(
             // Concatenate
             progressCallback(1.0, ProgressState.CONCATENATION)
             Log.i("OpenAI", "Concatenating audio files")
-            when (audioFormat) {
-                "wav" -> {
-                    concatWaveFiles(tempAudioFiles, outputFile)
-                }
-
-                "mp3", "ogg", "opus" -> {
-                    concatAudioFilesToWav(tempAudioFiles, outputFile)
-                }
-
-                else -> {
-                    Toast.makeText(
-                        context,
-                        "Unsupported audio format: $audioFormat",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
+            concatAudioFiles(tempAudioFiles, outputFile)
         } finally {
             tempAudioFiles.forEach { it.delete() }
         }

@@ -1,9 +1,10 @@
 [versions]
-agp = "9.0.1"
+agp = "9.1.0"
 annotation = "1.9.1"
 appcompatVersion = "1.4.0"
 core = "1.15.0"
 datastorePreferences = "1.1.1"
+ffmpegKitMainFullGplX6kb = "6.1.4"
 foundation = "1.7.6"
 foundationLayout = "1.7.6"
 guava = "33.3.1-android"
@@ -62,6 +63,7 @@ androidx-runtime = { module = "androidx.compose.runtime:runtime", version.ref = 
 androidx-ui-text = { module = "androidx.compose.ui:ui-text", version.ref = "uiText" }
 androidx-ui-unit = { module = "androidx.compose.ui:ui-unit", version.ref = "uiUnit" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastorePreferences" }
+ffmpeg-kit-main-full-gpl-x6kb = { module = "io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-full-gpl-16kb", version.ref = "ffmpegKitMainFullGplX6kb" }
 google-material = { module = "com.google.android.material:material" }
 guava = { module = "com.google.guava:guava", version.ref = "guava" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }

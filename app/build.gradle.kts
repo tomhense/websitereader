@@ -84,4 +84,5 @@ dependencies {
     implementation(libs.readability4j)
     implementation(libs.okhttp)
     implementation(libs.jsoup)
+    implementation(libs.ffmpeg.kit.main.full.gpl.x6kb)
 }
