@@ -81,7 +81,7 @@ class OpenAI(
             // Concatenate
             progressCallback(1.0, ProgressState.CONCATENATION)
             Log.i("OpenAI", "Concatenating audio files")
-            concatAudioFiles(tempAudioFiles, outputFile)
+            concatAudioFiles(context, tempAudioFiles, outputFile)
         } finally {
             tempAudioFiles.forEach { it.delete() }
         }

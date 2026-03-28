@@ -66,7 +66,7 @@ class Android(private val context: Context) : TextToSpeech.OnInitListener, Provi
 
         Log.i("tts", "Starting to concat segments")
         progressCallback(1.0, ProgressState.CONCATENATION)
-        concatAudioFiles(tempAudioFiles, outputFile)
+        concatAudioFiles(context, tempAudioFiles, outputFile)
 
         // Clean up temp files
         Log.i("tts", "Cleaning up temp files")

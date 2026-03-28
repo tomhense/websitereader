@@ -1,9 +1,19 @@
 package com.example.websitereader.tts
 
-import com.arthenica.ffmpegkit.FFmpegKit
-import com.arthenica.ffmpegkit.ReturnCode
+import android.content.Context
+import androidx.annotation.OptIn
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.transformer.Composition
+import androidx.media3.transformer.EditedMediaItem
+import androidx.media3.transformer.EditedMediaItemSequence
+import androidx.media3.transformer.ExportException
+import androidx.media3.transformer.ExportResult
+import androidx.media3.transformer.Transformer
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.IOException
 
 object Utils {
     fun splitTextIntoShortChunks(text: String, maxChunkLength: Int): List<String> {
@@ -72,35 +82,49 @@ object Utils {
     }
 
     /**
-     * Concatenates multiple audio files into one using FFmpeg.
-     * Uses stream copying (-c copy) to avoid re-encoding.
+     * Concatenates multiple audio files into one using Media3 Transformer.
+     * This function ensures Media3 Transformer is accessed on the Main thread.
      */
-    fun concatAudioFiles(inputFiles: List<File>, outputFile: File) {
+    @OptIn(UnstableApi::class)
+    suspend fun concatAudioFiles(context: Context, inputFiles: List<File>, outputFile: File) {
         if (inputFiles.isEmpty()) return
         if (inputFiles.size == 1) {
             inputFiles[0].copyTo(outputFile, overwrite = true)
             return
         }
 
-        // Create a temporary list file for ffmpeg concat demuxer
-        val listFile = File.createTempFile("ffmpeg-concat", ".txt")
-        try {
-            listFile.writer().use { writer ->
-                inputFiles.forEach { file ->
-                    // FFmpeg concat demuxer requires escaping single quotes in file paths
-                    val escapedPath = file.absolutePath.replace("'", "'\\''")
-                    writer.write("file '$escapedPath'\n")
+        withContext(Dispatchers.Main) {
+            val transformer = Transformer.Builder(context).build()
+            val editedMediaItems = inputFiles.map { file ->
+                EditedMediaItem.Builder(MediaItem.fromUri(file.absolutePath)).build()
+            }
+
+            val sequence = EditedMediaItemSequence(editedMediaItems)
+            val composition = Composition.Builder(listOf(sequence)).build()
+
+            val deferred = CompletableDeferred<Unit>()
+            val listener = object : Transformer.Listener {
+                override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+                    deferred.complete(Unit)
+                }
+
+                override fun onError(
+                    composition: Composition,
+                    exportResult: ExportResult,
+                    exportException: ExportException
+                ) {
+                    deferred.completeExceptionally(exportException)
                 }
             }
 
-            val command = "-f concat -safe 0 -i \"${listFile.absolutePath}\" -c copy -y \"${outputFile.absolutePath}\""
-            val session = FFmpegKit.execute(command)
+            transformer.addListener(listener)
+            transformer.start(composition, outputFile.absolutePath)
 
-            if (!ReturnCode.isSuccess(session.returnCode)) {
-                throw IOException("FFmpeg failed with return code ${session.returnCode}. Command: $command. Log: ${session.allLogsAsString}")
+            try {
+                deferred.await()
+            } finally {
+                transformer.removeListener(listener)
             }
-        } finally {
-            listFile.delete()
         }
     }
 }
