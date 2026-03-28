@@ -3,7 +3,6 @@ package com.example.websitereader.tts
 import android.content.Context
 import android.os.Build
 import android.util.Log
-import android.widget.Toast
 import androidx.annotation.RequiresApi
 import com.example.websitereader.model.ExternalTTSProvider
 import com.example.websitereader.tts.Utils.concatAudioFiles
@@ -23,6 +22,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 class OpenAI(
     private val context: Context, ttsProviderEntry: ExternalTTSProvider
@@ -36,7 +36,11 @@ class OpenAI(
     private val modelName = ttsProviderEntry.modelName
     private val asyncSynthesization = ttsProviderEntry.asyncSynthesization
 
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .build()
 
     init {
         isReady.complete(Unit)
@@ -110,7 +114,13 @@ class OpenAI(
         client.newCall(request).enqueue(object : okhttp3.Callback {
             override fun onFailure(call: okhttp3.Call, e: IOException) {
                 Log.e("OpenAI", "TTS request failed", e)
-                if (continuation.isActive) continuation.resume(false, null)
+                if (continuation.isActive) continuation.resume(false) { cause, _, _ ->
+                    null?.let {
+                        it(
+                            cause
+                        )
+                    }
+                }
             }
 
             override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
@@ -120,13 +130,31 @@ class OpenAI(
                         FileOutputStream(file).use { fos ->
                             fos.write(body.bytes())
                         }
-                        if (continuation.isActive) continuation.resume(true, null)
+                        if (continuation.isActive) continuation.resume(true) { cause, _, _ ->
+                            null?.let {
+                                it(
+                                    cause
+                                )
+                            }
+                        }
                     } catch (ex: Exception) {
-                        if (continuation.isActive) continuation.resume(false, null)
+                        if (continuation.isActive) continuation.resume(false) { cause, _, _ ->
+                            null?.let {
+                                it(
+                                    cause
+                                )
+                            }
+                        }
                     }
                 } else {
                     Log.e("OpenAI", "TTS request failed : ${response.code} ${response.message}")
-                    if (continuation.isActive) continuation.resume(false, null)
+                    if (continuation.isActive) continuation.resume(false) { cause, _, _ ->
+                        null?.let {
+                            it(
+                                cause
+                            )
+                        }
+                    }
                 }
                 response.close()
             }

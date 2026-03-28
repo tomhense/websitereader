@@ -11,6 +11,7 @@ import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 const val READING_SPEED_WPM = 155 // Average (spoken) reading speed in WPM
 
@@ -66,7 +67,11 @@ class Article(
 
         @Throws(IOException::class)
         private fun fetchUrl(url: String): String {
-            val okHttpClient = OkHttpClient()
+            val okHttpClient = OkHttpClient.Builder()
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .build()
             val request = Request.Builder().url(url).build()
             okHttpClient.newCall(request).execute().use { response ->
                 return response.body?.string()
