@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.example.websitereader.ui.PreviewArticleScreen
+import com.example.websitereader.ui.WebsiteReaderTheme
 
 class PreviewArticle : ComponentActivity() {
     companion object {
@@ -18,7 +19,9 @@ class PreviewArticle : ComponentActivity() {
         val content = intent.getStringExtra(EXTRA_CONTENT) ?: ""
 
         setContent {
-            PreviewArticleScreen(headline = headline, content = content)
+            WebsiteReaderTheme {
+                PreviewArticleScreen(headline = headline, content = content)
+            }
         }
     }
 }

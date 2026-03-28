@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.example.websitereader.settings.TTSProviderStore
 import com.example.websitereader.ui.ShareReceiverScreen
+import com.example.websitereader.ui.WebsiteReaderTheme
 
 class ShareReceiver : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -13,11 +14,13 @@ class ShareReceiver : ComponentActivity() {
 
         TTSProviderStore.load(this)
         setContent {
-            ShareReceiverScreen(
-                sharedUrl = (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain").let {
-                    intent?.getStringExtra(Intent.EXTRA_TEXT) ?: ""
-                },
-            )
+            WebsiteReaderTheme {
+                ShareReceiverScreen(
+                    sharedUrl = (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain").let {
+                        intent?.getStringExtra(Intent.EXTRA_TEXT) ?: ""
+                    },
+                )
+            }
         }
     }
 }

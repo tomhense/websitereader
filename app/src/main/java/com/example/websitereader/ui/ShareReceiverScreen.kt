@@ -3,6 +3,7 @@ package com.example.websitereader.ui
 import android.content.Context
 import android.content.Context.BIND_AUTO_CREATE
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.util.Log
 import android.util.Patterns
@@ -525,8 +526,11 @@ fun ShareReceiverScreen(
     }
 }
 
-@Preview
+@Preview(name = "Light Mode")
+@Preview(name = "Dark Mode", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 fun ShareReceiverScreenPreview() {
-    ShareReceiverScreen(sharedUrl = "https://example.com")
+    WebsiteReaderTheme {
+        ShareReceiverScreen(sharedUrl = "https://example.com")
+    }
 }
