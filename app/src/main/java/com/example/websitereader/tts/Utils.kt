@@ -10,6 +10,7 @@ import androidx.media3.transformer.EditedMediaItemSequence
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.Transformer
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -86,15 +87,15 @@ object Utils {
      * This function ensures Media3 Transformer is accessed on the Main thread.
      */
     @OptIn(UnstableApi::class)
-    suspend fun concatAudioFiles(context: Context, inputFiles: List<File>, outputFile: File) {
-        if (inputFiles.isEmpty()) return
-        if (inputFiles.size == 1) {
-            inputFiles[0].copyTo(outputFile, overwrite = true)
-            return
-        }
+    suspend fun concatAudioFiles(context: Context, inputFiles: List<File>, outputFile: File) =
+        withContext(Dispatchers.Main.immediate) {
+            if (inputFiles.isEmpty()) return@withContext
+            if (inputFiles.size == 1) {
+                inputFiles[0].copyTo(outputFile, overwrite = true)
+                return@withContext
+            }
 
-        withContext(Dispatchers.Main) {
-            val transformer = Transformer.Builder(context).build()
+            val transformer = Transformer.Builder(context.applicationContext).build()
             val editedMediaItems = inputFiles.map { file ->
                 EditedMediaItem.Builder(MediaItem.fromUri(file.absolutePath)).build()
             }
@@ -122,9 +123,11 @@ object Utils {
 
             try {
                 deferred.await()
+            } catch (e: CancellationException) {
+                transformer.cancel()
+                throw e
             } finally {
                 transformer.removeListener(listener)
             }
         }
-    }
 }

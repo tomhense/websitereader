@@ -55,7 +55,7 @@ class Android(private val context: Context) : TextToSpeech.OnInitListener, Provi
 
         // Processing the chunks in parallel seems not not work, so synchronous it is
         val tempAudioFiles = ArrayList<File>()
-        chunks.indices.map { i ->
+        for (i in chunks.indices) {
             progressCallback(i.toDouble() / chunks.size, ProgressState.AUDIO_GENERATION)
             val tempFile = File(context.cacheDir, "$i.wav")
             tempAudioFiles.add(tempFile)
