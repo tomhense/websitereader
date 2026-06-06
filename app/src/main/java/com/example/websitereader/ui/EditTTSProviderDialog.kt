@@ -15,6 +15,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,9 +52,10 @@ fun VoiceSelector(
             value = value,
             onValueChange = onValueChange,
             label = { Text("Voice Name") },
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth(),
+            modifier = Modifier.menuAnchor(
+                type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                enabled = true
+            ),
             trailingIcon = {
                 IconButton(onClick = { expanded = !expanded }) {
                     Icon(Icons.Default.ArrowDropDown, contentDescription = "Choose voice")
