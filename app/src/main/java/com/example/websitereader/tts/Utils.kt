@@ -1,20 +1,9 @@
 package com.example.websitereader.tts
 
-import android.content.Context
-import androidx.annotation.OptIn
-import androidx.media3.common.MediaItem
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.transformer.Composition
-import androidx.media3.transformer.EditedMediaItem
-import androidx.media3.transformer.EditedMediaItemSequence
-import androidx.media3.transformer.ExportException
-import androidx.media3.transformer.ExportResult
-import androidx.media3.transformer.Transformer
-import kotlin.coroutines.cancellation.CancellationException
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.ReturnCode
 import java.io.File
+import java.io.IOException
 
 object Utils {
     fun splitTextIntoShortChunks(text: String, maxChunkLength: Int): List<String> {
@@ -83,51 +72,35 @@ object Utils {
     }
 
     /**
-     * Concatenates multiple audio files into one using Media3 Transformer.
-     * This function ensures Media3 Transformer is accessed on the Main thread.
+     * Concatenates multiple audio files into one using FFmpeg.
+     * Uses stream copying (-c copy) to avoid re-encoding.
      */
-    @OptIn(UnstableApi::class)
-    suspend fun concatAudioFiles(context: Context, inputFiles: List<File>, outputFile: File) =
-        withContext(Dispatchers.Main.immediate) {
-            if (inputFiles.isEmpty()) return@withContext
-            if (inputFiles.size == 1) {
-                inputFiles[0].copyTo(outputFile, overwrite = true)
-                return@withContext
-            }
-
-            val transformer = Transformer.Builder(context.applicationContext).build()
-            val editedMediaItems = inputFiles.map { file ->
-                EditedMediaItem.Builder(MediaItem.fromUri(file.absolutePath)).build()
-            }
-
-            val sequence = EditedMediaItemSequence(editedMediaItems)
-            val composition = Composition.Builder(listOf(sequence)).build()
-
-            val deferred = CompletableDeferred<Unit>()
-            val listener = object : Transformer.Listener {
-                override fun onCompleted(composition: Composition, exportResult: ExportResult) {
-                    deferred.complete(Unit)
-                }
-
-                override fun onError(
-                    composition: Composition,
-                    exportResult: ExportResult,
-                    exportException: ExportException
-                ) {
-                    deferred.completeExceptionally(exportException)
-                }
-            }
-
-            transformer.addListener(listener)
-            transformer.start(composition, outputFile.absolutePath)
-
-            try {
-                deferred.await()
-            } catch (e: CancellationException) {
-                transformer.cancel()
-                throw e
-            } finally {
-                transformer.removeListener(listener)
-            }
+    fun concatAudioFiles(inputFiles: List<File>, outputFile: File) {
+        if (inputFiles.isEmpty()) return
+        if (inputFiles.size == 1) {
+            inputFiles[0].copyTo(outputFile, overwrite = true)
+            return
         }
+
+        // Create a temporary list file for ffmpeg concat demuxer
+        val listFile = File.createTempFile("ffmpeg-concat", ".txt")
+        try {
+            listFile.writer().use { writer ->
+                inputFiles.forEach { file ->
+                    // FFmpeg concat demuxer requires escaping single quotes in file paths
+                    val escapedPath = file.absolutePath.replace("'", "'\\''")
+                    writer.write("file '$escapedPath'\n")
+                }
+            }
+
+            val command = "-f concat -safe 0 -i \"${listFile.absolutePath}\" -c copy -y \"${outputFile.absolutePath}\""
+            val session = FFmpegKit.execute(command)
+
+            if (!ReturnCode.isSuccess(session.returnCode)) {
+                throw IOException("FFmpeg failed with return code ${session.returnCode}. Command: $command. Log: ${session.allLogsAsString}")
+            }
+        } finally {
+            listFile.delete()
+        }
+    }
 }
