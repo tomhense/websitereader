@@ -3,7 +3,6 @@ package com.example.websitereader.model
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import net.dankito.readability4j.extended.Readability4JExtended
 import okhttp3.OkHttpClient
@@ -54,7 +53,7 @@ class Article(
                     val readingTimeInSecs =
                         (wholeText?.split(Regex("\\s+"))?.size!!) / READING_SPEED_WPM * 60
 
-                    if (articleText != null && headline != null) {
+                    if (articleText != null) {
                         Article(url, lang, headline, articleText, wholeText, readingTimeInSecs)
                     } else {
                         null
@@ -74,8 +73,7 @@ class Article(
                 .build()
             val request = Request.Builder().url(url).build()
             okHttpClient.newCall(request).execute().use { response ->
-                return response.body?.string()
-                    ?: throw IOException("Unexpected empty response body")
+                return response.body.string()
             }
         }
 

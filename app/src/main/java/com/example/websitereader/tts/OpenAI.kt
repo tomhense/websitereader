@@ -17,7 +17,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.ResponseBody
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -67,9 +66,12 @@ class OpenAI(
                     async {
                         val success = synthesizeTextChunkToFile(chunk, langCode, tempAudioFiles[i])
                         if (!success) throw IOException("OpenAI TTS failed for chunk $i")
-                        
+
                         val completed = completedChunksCount.incrementAndGet()
-                        progressCallback(completed.toDouble() / chunks.size, ProgressState.AUDIO_GENERATION)
+                        progressCallback(
+                            completed.toDouble() / chunks.size,
+                            ProgressState.AUDIO_GENERATION
+                        )
                         true
                     }
                 }
@@ -79,7 +81,10 @@ class OpenAI(
                 for (i in chunks.indices) {
                     val success = synthesizeTextChunkToFile(chunks[i], langCode, tempAudioFiles[i])
                     if (!success) throw IOException("OpenAI TTS failed for chunk $i")
-                    progressCallback((i + 1).toDouble() / chunks.size, ProgressState.AUDIO_GENERATION)
+                    progressCallback(
+                        (i + 1).toDouble() / chunks.size,
+                        ProgressState.AUDIO_GENERATION
+                    )
                 }
             }
             // Concatenate
@@ -125,18 +130,13 @@ class OpenAI(
                 response.use { resp ->
                     if (resp.isSuccessful) {
                         val body = resp.body
-                        if (body != null) {
-                            try {
-                                FileOutputStream(file).use { fos ->
-                                    fos.write(body.bytes())
-                                }
-                                if (continuation.isActive) continuation.resume(true)
-                            } catch (e: Exception) {
-                                Log.e("OpenAI", "Error writing chunk to file", e)
-                                if (continuation.isActive) continuation.resume(false)
+                        try {
+                            FileOutputStream(file).use { fos ->
+                                fos.write(body.bytes())
                             }
-                        } else {
-                            Log.e("OpenAI", "Response body is null")
+                            if (continuation.isActive) continuation.resume(true)
+                        } catch (e: Exception) {
+                            Log.e("OpenAI", "Error writing chunk to file", e)
                             if (continuation.isActive) continuation.resume(false)
                         }
                     } else {
