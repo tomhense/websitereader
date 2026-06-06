@@ -1,6 +1,7 @@
 package com.example.websitereader.ui
 
 import android.net.Uri
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,11 +15,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -47,7 +51,9 @@ private fun formatTime(millis: Long): String {
 
 @Composable
 fun AudioPlayerCard(
-    audioPlayer: AudioPlayer, audioUri: Uri, modifier: Modifier = Modifier
+    audioPlayer: AudioPlayer,
+    audioUri: Uri,
+    modifier: Modifier = Modifier,
 ) {
     rememberCoroutineScope()
 
@@ -55,9 +61,12 @@ fun AudioPlayerCard(
     val isPlaying by audioPlayer.isPlaying.collectAsState()
     val position by audioPlayer.position.collectAsState()
     val duration by audioPlayer.duration.collectAsState()
+    val currentSpeed by audioPlayer.playbackSpeed.collectAsState()
 
-    var userSeeking by remember { mutableStateOf(false) }
+    var userSeeking by remember { mutableStateOf(value = false) }
     var sliderPosition by remember { mutableFloatStateOf(0f) }
+    var showSpeedMenu by remember { mutableStateOf(false) }
+    val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 
     // Set up initial play
     LaunchedEffect(audioUri) {
@@ -78,7 +87,8 @@ fun AudioPlayerCard(
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(
-                    onClick = { audioPlayer.playPause() }) {
+                    onClick = { audioPlayer.playPause() }
+                ) {
                     if (isPlaying) {
                         Icon(
                             contentDescription = "Pause",
@@ -98,6 +108,26 @@ fun AudioPlayerCard(
                     formatTime(position) + " / " + formatTime(duration),
                     style = MaterialTheme.typography.bodyLarge
                 )
+                Spacer(Modifier.weight(1f))
+                Box {
+                    TextButton(onClick = { showSpeedMenu = true }) {
+                        Text("${currentSpeed}x")
+                    }
+                    DropdownMenu(
+                        expanded = showSpeedMenu,
+                        onDismissRequest = { showSpeedMenu = false }
+                    ) {
+                        speeds.forEach { speed ->
+                            DropdownMenuItem(
+                                text = { Text("${speed}x") },
+                                onClick = {
+                                    audioPlayer.setPlaybackSpeed(speed)
+                                    showSpeedMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
             }
         }
 

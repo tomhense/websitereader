@@ -20,9 +20,10 @@ class AudioPlayer(context: Context) {
     private var controller: MediaController? = null
 
     // Expose these to UI
-    val isPlaying = MutableStateFlow(false)
+    val isPlaying = MutableStateFlow(value = false)
     val position = MutableStateFlow(0L)
     val duration = MutableStateFlow(0L)
+    val playbackSpeed = MutableStateFlow(1.0f)
 
     private var positionJob: Job? = null
 
@@ -35,7 +36,8 @@ class AudioPlayer(context: Context) {
                 try {
                     controller = controllerFuture.get()
                     // Observe playback state changes
-                    controller?.addListener(object : Player.Listener {
+                    controller?.addListener(
+                        object : Player.Listener {
                         override fun onIsPlayingChanged(isPlayingVal: Boolean) {
                             isPlaying.value = isPlayingVal
                         }
@@ -43,7 +45,12 @@ class AudioPlayer(context: Context) {
                         override fun onPlaybackStateChanged(playbackState: Int) {
                             duration.value = controller?.duration ?: 0L
                         }
-                    })
+
+                        override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+                            playbackSpeed.value = playbackParameters.speed
+                        }
+                    },
+                    )
                     startPositionUpdates() // Start periodic updates for position
                 } catch (e: Exception) {
                     Log.e("AudioPlayer", "MediaController init failed: ${e.message}")
@@ -69,6 +76,10 @@ class AudioPlayer(context: Context) {
 
     fun seekTo(pos: Long) {
         controller?.seekTo(pos)
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        controller?.setPlaybackSpeed(speed)
     }
 
     private fun startPositionUpdates() {
