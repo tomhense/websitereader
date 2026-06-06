@@ -93,11 +93,23 @@ object Utils {
                 }
             }
 
-            val command = "-f concat -safe 0 -i \"${listFile.absolutePath}\" -c copy -y \"${outputFile.absolutePath}\""
-            val session = FFmpegKit.execute(command)
+            val commandArguments = arrayOf(
+                "-f", "concat",
+                "-safe", "0",
+                "-i", listFile.absolutePath,
+                "-c", "copy",
+                "-y", outputFile.absolutePath,
+            )
+            val session = FFmpegKit.executeWithArguments(commandArguments)
 
             if (!ReturnCode.isSuccess(session.returnCode)) {
-                throw IOException("FFmpeg failed with return code ${session.returnCode}. Command: $command. Log: ${session.allLogsAsString}")
+                throw IOException(
+                    "FFmpeg failed with return code ${session.returnCode}. Command: ${
+                        commandArguments.joinToString(
+                            " "
+                        )
+                    }. Log: ${session.allLogsAsString}"
+                )
             }
         } finally {
             listFile.delete()

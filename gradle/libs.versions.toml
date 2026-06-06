@@ -65,7 +65,7 @@ androidx-runtime = { module = "androidx.compose.runtime:runtime", version.ref = 
 androidx-ui-text = { module = "androidx.compose.ui:ui-text", version.ref = "uiText" }
 androidx-ui-unit = { module = "androidx.compose.ui:ui-unit", version.ref = "uiUnit" }
 datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastorePreferences" }
-ffmpeg-kit = { module = "io.github.nikita36078:ffmpeg-kit", version.ref = "ffmpegKit" }
+ffmpeg-kit = { module = "io.github.nikita36078:ffmpeg-kit-audio", version.ref = "ffmpegKit" }
 ffmpeg-kit-lts-full-gpl-x6kb = { module = "io.github.jamaismagic.ffmpeg:ffmpeg-kit-lts-full-gpl-16kb", version.ref = "ffmpegKitLtsFullGplX6kb" }
 ffmpeg-kit-main-full-gpl-x6kb = { module = "io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-full-gpl-16kb", version.ref = "ffmpegKitMainFullGplX6kb" }
 google-material = { module = "com.google.android.material:material" }

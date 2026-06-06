@@ -84,5 +84,5 @@ dependencies {
     implementation(libs.readability4j)
     implementation(libs.okhttp)
     implementation(libs.jsoup)
-    implementation(libs.ffmpeg.kit)
+    implementation("io.github.minorlai:ffmpeg-kit-16kb:6.1.2")
 }
